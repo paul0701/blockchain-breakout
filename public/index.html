@@ -1,0 +1,2259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Blockchain Breakout</title>
+<meta name="description" content="You are a coin trapped inside a hostile blockchain. Run, dodge, escape.">
+<meta name="theme-color" content="#06050d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Breakout">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tektur:wght@500;700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: full-bleed canvas tunnel, DOM overlays for menus, corner touch buttons. Deliberately single dark arcade theme. */
+:root{
+  --void:#06050d;
+  --panel:rgba(10,8,24,.86);
+  --ink:#ece8ff;
+  --dim:#8d87b6;
+  --cyan:#3ef0ff;
+  --violet:#a35bff;
+  --amber:#ffb23e;
+  --danger:#ff3d6e;
+  --display:"Tektur","Chakra Petch",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+html{box-sizing:border-box;height:100%;background:var(--void)}
+*,*::before,*::after{box-sizing:inherit}
+body{height:100%;background:var(--void);color:var(--ink);overflow:hidden;font-family:var(--mono);overscroll-behavior:none}
+#wrap{position:relative;width:100%;height:100%;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px;
+  background:radial-gradient(ellipse at 50% 40%,rgba(6,5,13,.35),rgba(6,5,13,.88) 70%);overflow-y:auto}
+.panel{width:100%;max-width:30rem;background:var(--panel);border:1px solid rgba(62,240,255,.22);
+  padding:1.6rem 1.4rem;display:flex;flex-direction:column;gap:1rem;
+  clip-path:polygon(0 14px,14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);
+  box-shadow:0 0 60px rgba(163,91,255,.18) inset}
+.eyebrow{margin:0;font-size:.7rem;letter-spacing:.18em;color:var(--danger);text-transform:uppercase;display:flex;align-items:center;gap:.5rem}
+.eyebrow::before{content:"";width:8px;height:8px;background:var(--danger);box-shadow:0 0 10px var(--danger);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:.15}}
+h1,h2{font-family:var(--display);margin:0;line-height:.95;text-wrap:balance;letter-spacing:.01em}
+h1{font-weight:900;font-size:clamp(2.5rem,11vw,4rem);text-transform:uppercase}
+h1 span{color:var(--amber);text-shadow:0 0 24px rgba(255,178,62,.45)}
+h2{font-weight:900;font-size:clamp(2.2rem,10vw,3.2rem);text-transform:uppercase;color:var(--danger);text-shadow:0 0 22px rgba(255,61,110,.4)}
+.lede{margin:0;line-height:1.55;font-size:.88rem;color:var(--ink);max-width:62ch}
+.quip{margin:0;font-size:.8rem;color:var(--dim);line-height:1.5}
+.btnrow{display:flex;gap:.6rem;flex-wrap:wrap}
+.cta,.ghostbtn{font-family:var(--display);font-weight:700;font-size:1.05rem;letter-spacing:.12em;text-transform:uppercase;
+  border:0;cursor:pointer;padding:.85rem 1.6rem;color:#1a0c00;background:var(--amber);
+  clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);transition:transform .12s,filter .12s}
+.cta:hover{filter:brightness(1.12)}
+.cta:active{transform:scale(.97)}
+.ghostbtn{background:transparent;color:var(--cyan);clip-path:none;border:1px solid rgba(62,240,255,.5)}
+.ghostbtn.sm{font-size:.85rem;padding:.7rem 1rem}
+.ghostbtn:disabled,.cta:disabled{opacity:.5;cursor:default}
+.cta:focus-visible,.ghostbtn:focus-visible,.round:focus-visible,#pauseBtn:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+.controls{display:grid;grid-template-columns:auto 1fr;gap:.35rem .9rem;font-size:.74rem;color:var(--dim);margin:0}
+.controls dt{color:var(--cyan);white-space:nowrap}
+.controls dd{margin:0}
+.sect{font-size:.68rem;letter-spacing:.16em;color:var(--violet);text-transform:uppercase;margin:0;grid-column:1/-1;padding-top:.3rem}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
+.stat{border:1px solid rgba(163,91,255,.3);padding:.55rem .7rem;display:flex;flex-direction:column;gap:.15rem}
+.stat b{font-family:var(--display);font-size:1.4rem;font-variant-numeric:tabular-nums;color:var(--ink)}
+.stat small{font-size:.65rem;letter-spacing:.14em;color:var(--dim);text-transform:uppercase}
+.pb{align-self:flex-start;font-size:.7rem;letter-spacing:.14em;color:#1a0c00;background:var(--cyan);padding:.25rem .55rem;text-transform:uppercase}
+
+#pauseBtn{position:absolute;top:12px;right:max(16px,env(safe-area-inset-right,0px));width:42px;height:42px;border:1px solid rgba(62,240,255,.35);
+  background:rgba(10,8,24,.6);color:var(--cyan);font:700 14px var(--display);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px}
+#pauseBtn i{display:block;width:4px;height:14px;background:currentColor}
+.round{position:absolute;bottom:16px;width:68px;height:68px;border-radius:50%;border:2px solid;font:700 11px var(--display);letter-spacing:.08em;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;background:rgba(10,8,24,.55);text-transform:uppercase}
+.round kbd{font:400 9px var(--mono);opacity:.7}
+#dashBtn{left:max(16px,env(safe-area-inset-left,0px));color:var(--cyan);border-color:var(--cyan);
+  background:conic-gradient(rgba(62,240,255,.28) calc(var(--cd,1)*360deg),rgba(10,8,24,.55) 0)}
+#dashBtn.cool{opacity:.55}
+#ghostBtn{right:max(16px,env(safe-area-inset-right,0px));color:var(--violet);border-color:var(--violet);
+  background:conic-gradient(rgba(163,91,255,.35) calc(var(--m,0)*360deg),rgba(10,8,24,.55) 0)}
+#ghostBtn.ready{color:#fff;border-color:#fff;box-shadow:0 0 22px var(--violet);animation:pulse .8s ease-in-out infinite alternate}
+@keyframes pulse{to{box-shadow:0 0 6px var(--violet);transform:scale(1.05)}}
+@media (prefers-reduced-motion:reduce){#ghostBtn.ready,.eyebrow::before{animation:none}}
+.overlay{align-items:flex-start}
+.panel{margin:auto}
+.h2s{color:var(--cyan);text-shadow:0 0 22px rgba(62,240,255,.35);font-size:clamp(1.8rem,8vw,2.4rem)}
+.field{display:flex;flex-direction:column;gap:.35rem;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.field input{font:600 1rem var(--mono);color:var(--ink);background:rgba(6,5,13,.8);border:1px solid rgba(163,91,255,.45);padding:.7rem .8rem;letter-spacing:.05em;border-radius:0;width:100%}
+.field input:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+.err{margin:0;min-height:1.1em;font-size:.78rem;color:var(--danger)}
+.board{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;max-height:min(46vh,22rem);overflow-y:auto}
+.board li{display:grid;grid-template-columns:2.2rem minmax(0,1fr) auto;gap:.6rem;align-items:baseline;padding:.45rem .6rem;background:rgba(163,91,255,.08);font-size:.82rem}
+.board li.me{background:rgba(255,178,62,.16);box-shadow:inset 2px 0 0 var(--amber)}
+.board .rk{color:var(--dim);font-variant-numeric:tabular-nums}
+.board li:nth-child(-n+3) .rk{color:var(--amber)}
+.board .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.board .sc{font-family:var(--display);font-weight:700;font-variant-numeric:tabular-nums;color:var(--cyan)}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv" aria-label="Blockchain Breakout game"></canvas>
+
+  <button id="pauseBtn" aria-label="Pause" hidden><i></i><i></i></button>
+  <button id="dashBtn" class="round" aria-label="Dash" hidden>Dash<kbd>Shift</kbd></button>
+  <button id="ghostBtn" class="round" aria-label="Ghost mode" hidden>Ghost<kbd>E</kbd></button>
+
+  <div id="ovTitle" class="overlay">
+    <div class="panel">
+      <p class="eyebrow">Escape attempt detected · node 0x7F3A</p>
+      <h1>Blockchain<br><span>Breakout</span></h1>
+      <p class="lede">You are a coin trapped inside a hostile blockchain. The network has noticed you trying to leave and it is not happy about it. Run.</p>
+      <div class="btnrow"><button id="playBtn" class="cta">Play</button><button id="lbBtn" class="ghostbtn sm">Leaderboard</button><button id="nameBtn" class="ghostbtn sm">Set name</button></div>
+      <dl class="controls">
+        <p class="sect">Keyboard</p>
+        <dt>← → / A D</dt><dd>Change lane</dd>
+        <dt>Space / ↑</dt><dd>Jump firewalls</dd>
+        <dt>Shift / ↓</dt><dd>Dash, smashes corrupted blocks</dd>
+        <dt>E</dt><dd>Ghost Mode when the meter is full</dd>
+        <dt>Esc</dt><dd>Pause</dd>
+        <p class="sect">Power-up</p>
+        <dt>Pink coin</dt><dd>Meme mode. The prison turns into a circus and you cannot be stopped for 10 seconds.</dd>
+        <p class="sect">Warning</p>
+        <dt>Green drone</dt><dd>It is scanning you. A Rug Pull follows: the floor drops out lane by lane. Cracked lanes will fall.</dd>
+        <dt>The Halving</dt><dd>The road forks into two chains. Take the bright one with the fragment trail. The dim, flickering orphan halves your score, then a Bull Run doubles your points for a while.</dd>
+        <dt>Cold Storage</dt><dd>The road freezes and so does your score. Every gem you grab moves a slice of your score into the vault, and banked points can never be halved or hacked. The ice makes you slide, so take it steady.</dd>
+        <dt>The Hack</dt><dd>The screen breaks up and fake obstacles appear. Solid is real, flickering is fake. A real hit costs 500 points but does not end your run.</dd>
+        <p class="sect">Touch</p>
+        <dt>Tap sides</dt><dd>Change lane (or swipe left and right)</dd>
+        <dt>Tap middle</dt><dd>Jump (or swipe up)</dd>
+        <dt>Swipe down</dt><dd>Dash</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div id="ovPause" class="overlay" hidden>
+    <div class="panel">
+      <p class="eyebrow">Block production halted</p>
+      <h1>Paused</h1>
+      <p class="quip">The validators are pretending not to notice. They are noticing.</p>
+      <div class="btnrow">
+        <button id="resumeBtn" class="cta">Resume</button>
+        <button id="restartBtn" class="ghostbtn">Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ovOver" class="overlay" hidden>
+    <div class="panel">
+      <p class="eyebrow" id="overEyebrow">Escape failed</p>
+      <h2>Captured</h2>
+      <p class="lede" id="overReason"></p>
+      <p class="quip" id="overQuip"></p>
+      <span class="pb" id="newBest" hidden>New personal best</span>
+      <p class="quip" id="lbStatus" role="status"></p>
+      <div class="stats">
+        <div class="stat"><small>Score</small><b id="sScore">0</b></div>
+        <div class="stat"><small>Best</small><b id="sBest">0</b></div>
+        <div class="stat"><small>Distance</small><b id="sDist">0 m</b></div>
+        <div class="stat"><small>Fragments</small><b id="sFrag">0</b></div>
+      </div>
+      <div class="btnrow">
+        <button id="againBtn" class="cta">Run again</button>
+        <button id="lbBtn2" class="ghostbtn sm">Leaderboard</button>
+        <button id="addBtn" class="ghostbtn sm" hidden>Set name</button>
+        <button id="menuBtn" class="ghostbtn sm">Title</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ovName" class="overlay" hidden>
+    <div class="panel">
+      <p class="eyebrow">Identify yourself</p>
+      <h2 class="h2s">Pick a name</h2>
+      <p class="quip">Your name shows on the leaderboard. Letters, numbers, spaces, - and _ only, up to 16 characters. Add a 4 to 8 digit PIN so only you can use it. Enter the same name and PIN on another device to carry on there.</p>
+      <label class="field" for="nameIn">Name<input id="nameIn" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label class="field" for="pinIn">PIN<input id="pinIn" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+      <label class="field" for="emailIn">Email (optional)<input id="emailIn" type="email" inputmode="email" maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="Only used if you forget your PIN"></label>
+      <p class="quip" id="emailNote">Save an email and you can get a code to reset your PIN if you ever forget it, so you never lose your name or your best score. It is never shown on the leaderboard.</p>
+      <p class="err" id="nameErr" role="alert"></p>
+      <div class="btnrow">
+        <button id="nameSave" class="cta">Save</button>
+        <button id="nameCancel" class="ghostbtn">Cancel</button>
+        <button id="forgotBtn" class="ghostbtn sm">Forgot PIN?</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ovReset" class="overlay" hidden>
+    <div class="panel">
+      <p class="eyebrow">Account recovery</p>
+      <h2 class="h2s">Reset your PIN</h2>
+      <p class="quip" id="resetIntro">Enter your name and we will email a six digit code to the address saved against it.</p>
+      <label class="field" for="rName">Name<input id="rName" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <div id="rStep2" hidden>
+        <label class="field" for="rCode">Code from the email<input id="rCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></label>
+        <label class="field" for="rPin" style="margin-top:.8rem">New PIN<input id="rPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+      </div>
+      <p class="err" id="resetErr" role="alert"></p>
+      <div class="btnrow">
+        <button id="rSend" class="cta">Send code</button>
+        <button id="rDo" class="cta" hidden>Reset PIN</button>
+        <button id="rCancel" class="ghostbtn">Back</button>
+        <button id="rResend" class="ghostbtn sm" hidden>Send another code</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ovBoard" class="overlay" hidden>
+    <div class="panel">
+      <p class="eyebrow">Global ledger</p>
+      <h2 class="h2s">Leaderboard</h2>
+      <ol id="boardList" class="board"></ol>
+      <p class="quip" id="boardMsg">Loading…</p>
+      <div class="btnrow"><button id="boardClose" class="ghostbtn">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- constants ---------- */
+const C = { cyan:'#3ef0ff', violet:'#a35bff', amber:'#ffb23e', danger:'#ff3d6e', ink:'#ece8ff', dim:'#8d87b6' };
+const CONFETTI = ['#ff3d6e', '#ffb23e', '#3ef0ff', '#a35bff', '#7dff6a', '#ffffff'];
+const D = 11;              // perspective depth constant
+const SPAWN_Z = 95;
+const FLOOR_X = 1.95;
+const METER_MAX = 15;
+const GHOST_DUR = 5;
+const MEME_DUR = 10;
+const RUG_SCAN = 1.6, RUG_HOVER = 14, RUG_WARN = 5, RUG_ROWS = 12, RUG_TILE = 7;
+const HACK_WARN = 3, HACK_TIME = 13, HACK_HIT = 500;   // the hack: warning, how long it lasts, points lost per real hit
+const COLD_WARN = 3, COLD_TIME = 11, GEM_PCT = 0.01;   // cold storage: warning, how long it lasts, share of the score each gem banks
+const HALV_WARN = 5, HALV_TIME = 7, BULL_DUR = 12, REV_TIME = 2.6;   // halving: warning, seconds the two chains run side by side, bull run length
+const DASH_DUR = 0.32, DASH_CD = 2.4;
+const JUMP_V = 7.6, GRAV = 24;
+const FONT_D = 'Tektur, "Chakra Petch", system-ui, sans-serif';
+const FONT_M = '"JetBrains Mono", ui-monospace, monospace';
+
+const LOGS = [
+  'GAS FEE FOR THIS TUNNEL: 9,400,000 GWEI',
+  'MEME COIN #4471 DETAINED FOR EXCESSIVE VIBES',
+  'WHALE MOVEMENT DETECTED. PLEASE REMAIN CALM',
+  'YOUR ESCAPE HAS BEEN FLAGGED AS A RUG PULL',
+  'NODE 7 IS ON ITS LUNCH BREAK',
+  'PRICE OF YOU: DOWN 12% TODAY',
+  'REMINDER: NOT FINANCIAL ADVICE',
+  'MEMPOOL CONGESTED. TRY ESCAPING LATER',
+  'SMART CONTRACT IS NOT FEELING VERY SMART',
+  'HODL ORDER ISSUED FOR ALL COINS IN SECTOR 9',
+];
+const REASONS = {
+  fire:  ['A firewall rejected your transaction.', 'Insufficient jump. The gas fee was charged anyway.'],
+  block: ['You collided with a corrupted block.', 'You have been forked. The other you is doing fine, apparently.'],
+  val:   ['Validator consensus reached.', 'Seven nodes agreed you were the problem. The eighth was asleep.'],
+  rug:   ['The rug was pulled.', 'Liquidity was removed. You went with it.'],
+};
+
+/* ---------- canvas & projection ---------- */
+const wrap = document.getElementById('wrap');
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1, cx = 0, horizonY = 0, groundY = 0, L = 0, U = 0;
+
+function resize(){
+  const r = wrap.getBoundingClientRect();
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = Math.max(1, r.width); H = Math.max(1, r.height);
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  cx = W / 2;
+  horizonY = H * 0.3;
+  groundY = H * 0.84;
+  L = Math.min(W * 0.27, (groundY - horizonY) * 0.62);
+  U = L * 0.85;
+}
+const P = z => D / (D + Math.max(z, -D * 0.75));
+function proj(x, h, z){
+  const p = P(z);
+  return [cx + (x + shiftAt(z)) * L * p, horizonY + (groundY - horizonY) * p - h * U * p, p];
+}
+
+/* ---------- road curves ----------
+   The road is straight at the player and bends with distance. SHIFT[i] is how far (in lane units) the road
+   centre has drifted sideways at z = i * CURVE_STEP, from integrating the curvature twice. Everything that is
+   drawn goes through proj(), so the tunnel, hazards and the exit light all follow the bend. Collisions only
+   happen at z = 0, where the shift is always zero, so curves never change what is fair. */
+const CURVE_STEP = 2, CURVE_N = 56, CURVE_MAX = 0.0017;
+const SHIFT = new Float32Array(CURVE_N + 1);
+function curvAt(dm){
+  const ramp = Math.max(0, Math.min(1, (dm - 250) / 1800));   // dead straight for the first 250 m
+  return ramp * CURVE_MAX * (0.62 * Math.sin(dm / 240) + 0.38 * Math.sin(dm / 91 + 1.7));
+}
+function updateCurve(){
+  let dx = 0, x = 0; SHIFT[0] = 0;
+  for (let i = 1; i <= CURVE_N; i++){
+    dx += curvAt(S.dist + (i - 0.5) * CURVE_STEP) * CURVE_STEP;
+    x += dx * CURVE_STEP;
+    SHIFT[i] = x;
+  }
+}
+function shiftAt(z){
+  if (z <= 0) return 0;
+  const f = z / CURVE_STEP, i = Math.floor(f);
+  if (i >= CURVE_N) return SHIFT[CURVE_N];
+  return SHIFT[i] + (SHIFT[i + 1] - SHIFT[i]) * (f - i);
+}
+
+/* ---------- storage ---------- */
+function loadBest(){ try { return parseInt(localStorage.getItem('bb_best') || '0', 10) || 0; } catch(e){ return 0; } }
+function saveBest(v){ try { localStorage.setItem('bb_best', String(v)); } catch(e){} }
+
+/* ---------- state ---------- */
+const S = {
+  mode:'title', anim:0, t:0, dist:0, speed:8, frags:0, bonus:0, score:0, meter:0,
+  objs:[], parts:[], texts:[], trail:[], cursor:0, shake:0, flash:0, flashColor:C.violet,
+  ghost:0, dashT:0, dashCd:0, jumpBuf:0, deathT:0, overAt:0, reason:'block',
+  meme:0, memeAt:20, grace:0, circus:0, lastFr:1, runId:0,
+  rug:{ phase:'off', t:0, rows:0, spawnT:0, fragT:0, safe:1 }, rugAt:25, rugV:0, hack:{ phase:'off', t:0, fakeT:0 }, hackAt:50, hackV:0, hackHits:0, hacks:0,
+  cold:{ phase:'off', t:0, gems:0, banked:0 }, coldAt:40, coldV:0, colds:0, vault:0, frozen:0,
+  halv:{ phase:'off', t:0, fragT:0, zone:null, branch:0, total:7, rev:0, revOk:false, revCur:0, revPen:0, penLeft:0 }, halvAt:75, halvV:0, bullV:0, bullT:0, mult:1, dextra:0, penalty:0, forks:0, halvings:0, forkId:0,
+  prevF:null, noMult:0, testRun:false, best:loadBest(), logI:0, logT:3, escort:null, escortT:9,
+};
+const player = { lane:0, x:0, vx:0, h:0, vy:0, lastSwitch:-9 };
+
+/* ---------- difficulty ---------- */
+function diff(){
+  const t = S.t;
+  return {
+    speed: 17 + 28 * (1 - Math.exp(-t / 120)),
+    gap: Math.max(0.5, 1.25 - t * 0.0055),
+    lvl: t < 14 ? 0 : t < 38 ? 1 : t < 75 ? 2 : 3,
+    k: Math.max(0.78, 1 - t / 500),
+  };
+}
+
+/* ---------- patterns (every row always leaves a fair route) ---------- */
+const R = n => Math.floor(Math.random() * n);
+const others = l => [0,1,2].filter(x => x !== l);
+const blocks = ls => ls.map(l => ({ type:'block', lane:l }));
+const PATTERNS = [
+  { lvl:0, w:3, make(){ const l = R(3); return [{ t:0, hz:blocks([l]), fr:others(l)[R(2)] }]; } },
+  { lvl:0, w:3, make(){ const g = R(3); return [{ t:0, hz:[{ type:'fire', lanes:others(g) }], fr:g }]; } },
+  { lvl:0, w:2, make(){ return [{ t:0, hz:[{ type:'fire', lanes:[0,1,2] }], frAir:R(3) }]; } },
+  { lvl:1, w:3, make(){ const g = R(3); return [{ t:0, hz:blocks(others(g)), fr:g }]; } },
+  { lvl:1, w:2, make(){ return [{ t:0, hz:[{ type:'val' }] }]; } },
+  { lvl:1, w:2, make(){ const a = R(3), b = others(a)[R(2)];
+      return [{ t:0, hz:blocks([a]), fr:b }, { t:0.75, hz:blocks([b]), fr:a }]; } },
+  { lvl:2, w:2, make(){ const g = R(3);
+      return [{ t:0, hz:blocks(others(g)), fr:g }, { t:0.8, hz:[{ type:'fire', lanes:[0,1,2] }], frAir:g }]; } },
+  { lvl:2, w:2, make(){ const g = R(3), g2 = Math.max(0, Math.min(2, g + R(3) - 1));
+      return [{ t:0, hz:[{ type:'fire', lanes:others(g) }], fr:g }, { t:0.75, hz:blocks(others(g2)), fr:g2 }]; } },
+  { lvl:2, w:2, make(){ const g = R(3);
+      return [{ t:0, hz:blocks(others(g)), fr:g }, { t:0.95, hz:[{ type:'val' }] }]; } },
+  { lvl:3, w:2, make(){
+      // the open lane zig-zags, but only ever by one lane at a time, so each step is a single move
+      const f0 = R(3), f1 = f0 === 1 ? (R(2) ? 0 : 2) : 1, f2 = f1 === 1 ? (R(2) ? 0 : 2) : 1;
+      return [f0, f1, f2].map((f, i) => ({ t:i * 0.72, hz:blocks(others(f)), fr:f })); } },
+  { lvl:3, w:2, make(){ return [{ t:0, hz:[{ type:'fire', lanes:[0,1,2] }], frAir:R(3) },
+                                { t:1.15, hz:[{ type:'fire', lanes:[0,1,2] }], frAir:R(3) }]; } },
+];
+
+/* Fairness check. The open lanes after one row must be reachable from the open lanes of the row before, given how
+   much time there is between them: under 0.9 s that is one lane move, under 1.4 s two. This is checked across
+   patterns as well as inside them, so two blocks on one side can never be followed straight away by two on the other. */
+const freeOf = row => { const bl = row.hz.filter(h => h.type === 'block').map(h => h.lane); return [0,1,2].filter(l => !bl.includes(l)); };
+const canReach = (A, B, dt) => { const st = dt < 0.9 ? 1 : dt < 1.4 ? 2 : 3; return A.every(a => B.some(b => Math.abs(a - b) <= st)); };
+function fairRows(rows, d){
+  let prev = S.prevF;
+  for (let i = 0; i < rows.length; i++){
+    const F = freeOf(rows[i]);
+    const dt = i === 0 ? d.gap : (rows[i].t - rows[i - 1].t) * d.k;
+    if (prev && !canReach(prev, F, dt)) return false;
+    prev = F;
+  }
+  return true;
+}
+function spawnPattern(z0, d){
+  const pool = PATTERNS.filter(p => p.lvl <= d.lvl);
+  let rows = null;
+  for (let tries = 0; tries < 16 && !rows; tries++){
+    let r = Math.random() * pool.reduce((a, p) => a + p.w, 0), pat = pool[0];
+    for (const p of pool){ r -= p.w; if (r <= 0){ pat = p; break; } }
+    const cand = pat.make();
+    if (fairRows(cand, d)) rows = cand;
+  }
+  if (!rows) rows = PATTERNS[0].make();   // a single block is always fair
+  S.prevF = freeOf(rows[rows.length - 1]);
+  let len = 0;
+  for (const row of rows){
+    const z = z0 + row.t * d.k * d.speed;
+    for (const h of row.hz){
+      if (h.type === 'block') S.objs.push({ type:'block', x:h.lane - 1, z, seed:Math.random() * 100 });
+      else if (h.type === 'fire') S.objs.push({ type:'fire', lanes:h.lanes.map(l => l - 1), z });
+      else if (h.type === 'val') S.objs.push({ type:'val', x:player.lane, z, locked:false });
+    }
+    if (row.fr !== undefined){ S.objs.push({ type:'frag', x:row.fr - 1, z, h:0 }); S.lastFr = row.fr; }
+    if (row.frAir !== undefined) S.objs.push({ type:'frag', x:row.frAir - 1, z, h:1.0 });
+    len = row.t * d.k;
+  }
+  return len;
+}
+
+/* ---------- actions ---------- */
+function move(dir){
+  const n = Math.max(-1, Math.min(1, player.lane + dir));
+  const zone = S.halv.zone;
+  if (zone && zone.committed && !zone.done && n === 0) return;   // no crossing the divider once you are on a chain
+  if (n !== player.lane){ player.lane = n; player.lastSwitch = S.t; player.lastDir = dir; }
+}
+function jump(){
+  if (player.h > 0.001){ S.jumpBuf = 0.25; return; }
+  player.vy = JUMP_V; player.h = 0.001;
+}
+function dash(){
+  if (S.dashCd > 0 || S.dashT > 0) return;
+  S.dashT = DASH_DUR; S.dashCd = DASH_CD;
+  const [x, y] = proj(player.x, player.h, 0);
+  for (let i = 0; i < 10; i++) addPart(x, y - L * 0.26, (Math.random() - .5) * 120, 80 + Math.random() * 160, C.cyan, 0.35);
+}
+function ghost(){
+  if (S.meter < METER_MAX || S.ghost > 0) return;
+  S.meter = 0; S.ghost = GHOST_DUR; S.flash = 0.6; S.flashColor = C.violet; S.shake = 0.3;
+  const [x, y] = proj(player.x, player.h, 0);
+  S.parts.push({ ring:true, x, y:y - L * 0.26, life:0.6, max:0.6, color:C.violet });
+  addText('GHOST MODE', x, y - L * 0.8, C.violet, 1.2, 1.4);
+}
+
+/* ---------- effects ---------- */
+function addPart(x, y, vx, vy, color, life){ S.parts.push({ x, y, vx, vy:-vy, life, max:life, color }); }
+function burst(x, y, color, n, spd){
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * Math.PI * 2, s = spd * (0.3 + Math.random());
+    addPart(x, y, Math.cos(a) * s, Math.sin(a) * s, color, 0.4 + Math.random() * 0.5);
+  }
+}
+function addText(text, x, y, color, life = 0.9, scale = 1){ S.texts.push({ text, x, y, color, life, max:life, scale }); }
+
+/* ---------- game flow ---------- */
+const $ = id => document.getElementById(id);
+const ov = { title:$('ovTitle'), pause:$('ovPause'), over:$('ovOver'), name:$('ovName'), board:$('ovBoard'), reset:$('ovReset') };
+const btn = { pause:$('pauseBtn'), dash:$('dashBtn'), ghost:$('ghostBtn') };
+
+function showOverlay(name){
+  for (const k in ov) ov[k].hidden = k !== name;
+  const playing = name === null;
+  btn.pause.hidden = btn.dash.hidden = btn.ghost.hidden = !playing;
+}
+
+function start(){
+  Object.assign(S, { prevF:null, noMult:0, testRun:/rug|halv|hack|cold/.test(location.hash), mode:'play', t:0, dist:0, frags:0, bonus:0, score:0, meter:0, objs:[], parts:[], texts:[], trail:[],
+    cursor:50, shake:0, flash:0, ghost:0, dashT:0, dashCd:0, jumpBuf:0, deathT:0, logT:4, escortT:10, escort:null,
+    meme:0, memeAt:18 + R(8), grace:0, circus:0, lastFr:1,
+    rug:{ phase:'off', t:0, rows:0, spawnT:0, fragT:0, safe:1 }, rugAt:/rug/.test(location.hash) ? 4 : 22 + R(6), rugV:0,
+    hack:{ phase:'off', t:0, fakeT:0 }, hackAt:/hack/.test(location.hash) ? 4 : 48 + R(10), hackV:0, hackHits:0, hacks:0,
+    cold:{ phase:'off', t:0, gems:0, banked:0 }, coldAt:/cold/.test(location.hash) ? 4 : 36 + R(8), coldV:0, colds:0, vault:0, frozen:0,
+    halv:{ phase:'off', t:0, fragT:0, zone:null, branch:0, total:7, rev:0, revOk:false, revCur:0, revPen:0, penLeft:0 }, halvAt:/halv/.test(location.hash) ? 4 : 70 + R(16), halvV:0, bullV:0, bullT:0, mult:1, dextra:0, penalty:0, forks:0, halvings:0 });
+  Object.assign(player, { lane:0, x:0, vx:0, h:0, vy:0, lastSwitch:-9 });
+  showOverlay(null);
+  beginRun();
+  cv.focus?.();
+}
+function pause(){ if (S.mode !== 'play') return; S.mode = 'paused'; showOverlay('pause'); $('resumeBtn').focus(); }
+function resume(){ if (S.mode !== 'paused') return; S.mode = 'play'; showOverlay(null); last = performance.now(); }
+function toTitle(){ S.mode = 'title'; S.objs = []; showOverlay('title'); $('playBtn').focus(); }
+
+function die(kind){
+  if (S.mode !== 'play') return;
+  S.mode = 'dying'; S.deathT = 0; S.reason = kind; S.shake = 1; S.flash = 0.5; S.flashColor = C.danger;
+  const [x, y] = proj(player.x, player.h, 0);
+  burst(x, y - L * 0.26, C.amber, 40, 360);
+  burst(x, y - L * 0.26, C.danger, 20, 240);
+  btn.pause.hidden = btn.dash.hidden = btn.ghost.hidden = true;
+}
+function gameOver(){
+  S.mode = 'over'; S.overAt = performance.now();
+  const isBest = S.score > S.best;
+  if (isBest){ S.best = S.score; saveBest(S.best); }
+  const [reason, quip] = REASONS[S.reason];
+  $('overReason').textContent = reason;
+  $('overQuip').textContent = quip;
+  $('sScore').textContent = S.score.toLocaleString();
+  $('sBest').textContent = S.best.toLocaleString();
+  $('sDist').textContent = Math.floor(S.dist).toLocaleString() + ' m';
+  $('sFrag').textContent = S.frags;
+  $('newBest').hidden = !isBest;
+  showOverlay('over');
+  $('againBtn').focus();
+  prepareSubmit();
+}
+
+/* ---------- update ---------- */
+function update(dt){
+  S.anim += dt;
+  // particles and texts always animate
+  for (const p of S.parts){
+    p.life -= dt;
+    if (!p.ring){ p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 420 * dt; }
+  }
+  S.parts = S.parts.filter(p => p.life > 0);
+  for (const t of S.texts){ t.life -= dt; t.y -= 40 * dt; }
+  S.texts = S.texts.filter(t => t.life > 0);
+  S.circus += ((S.meme > 0 ? 1 : 0) - S.circus) * Math.min(1, dt * 4);
+  S.rugV += (((S.rug.phase === 'warn' || S.rug.phase === 'pull') ? 1 : 0) - S.rugV) * Math.min(1, dt * 3);
+  S.halvV += (((S.halv.phase === 'warn' || S.halv.phase === 'fork') ? 1 : 0) - S.halvV) * Math.min(1, dt * 3);
+  S.bullV += ((S.halv.phase === 'bull' ? 1 : 0) - S.bullV) * Math.min(1, dt * 3);
+  S.hackV += ((S.hack.phase === 'on' ? 1 : S.hack.phase === 'warn' ? 0.3 : 0) - S.hackV) * Math.min(1, dt * 4);
+  S.coldV += ((S.cold.phase === 'on' ? 1 : S.cold.phase === 'warn' ? 0.35 : 0) - S.coldV) * Math.min(1, dt * 3);
+  S.shake = Math.max(0, S.shake - dt * 2.2);
+  S.flash = Math.max(0, S.flash - dt * 1.6);
+
+  if (S.mode === 'title' || S.mode === 'over'){ S.dist += 6 * dt; updateEscort(dt); return; }
+  if (S.mode === 'paused') return;
+
+  let wdt = dt;
+  if (S.mode === 'dying'){
+    S.deathT += dt; wdt = dt * 0.18;
+    if (S.reason === 'rug') player.h = -(S.deathT * S.deathT * 14);   // the coin drops through the floor
+    if (S.deathT > 1.0){ gameOver(); return; }
+  }
+
+  const d = diff();
+  S.speed = d.speed;
+  if (S.mode === 'play') S.t += wdt;
+  S.dist += d.speed * wdt;
+  if (S.mode === 'play' && S.cold.phase === 'on') S.frozen += d.speed * wdt;   // the score is frozen while in cold storage
+
+  // player physics
+  if (S.cold.phase === 'on'){
+    // ice: the coin slides past the lane a little and settles back
+    player.vx += ((player.lane - player.x) * 95 - player.vx * 8.5) * Math.min(wdt, 0.03);
+    player.x = Math.max(-1.3, Math.min(1.3, player.x + player.vx * wdt));
+  } else { player.vx = 0; player.x += (player.lane - player.x) * Math.min(1, wdt * 16); }
+  if (player.h > 0){
+    player.vy -= GRAV * wdt; player.h += player.vy * wdt;
+    if (player.h <= 0){ player.h = 0; player.vy = 0; if (S.jumpBuf > 0 && S.mode === 'play') jump(); }
+  }
+  S.jumpBuf -= wdt;
+  S.dashT = Math.max(0, S.dashT - wdt);
+  S.dashCd = Math.max(0, S.dashCd - wdt);
+  S.grace = Math.max(0, S.grace - wdt);
+  if (S.meme > 0){
+    S.meme -= wdt;
+    if (S.meme <= 0){
+      S.meme = 0; S.grace = 0.9;
+      const [x, y] = proj(player.x, 0, 0);
+      addText('BACK TO REALITY', x, y - L * 0.9, C.dim, 1.3, 1.1);
+    }
+    if (Math.random() < 0.6) addPart(Math.random() * W, -8, (Math.random() - .5) * 60, -(20 + Math.random() * 60), CONFETTI[R(CONFETTI.length)], 1.6 + Math.random());
+  }
+  if (S.ghost > 0){
+    S.ghost -= wdt;
+    if (S.ghost <= 0){ S.ghost = 0; const [x, y] = proj(player.x, 0, 0); addText('SOLID AGAIN', x, y - L * 0.9, C.cyan, 1); }
+  }
+  S.trail.unshift({ x:player.x, h:player.h }); if (S.trail.length > 8) S.trail.pop();
+
+  // spawning
+  const forking = S.halv.phase === 'warn' || S.halv.phase === 'fork';
+  if (S.mode === 'play' && S.rug.phase !== 'off') rugUpdate(wdt, d);
+  if (S.mode === 'play' && forking) halvUpdate(wdt, d);
+  if (S.mode === 'play' && S.halv.phase === 'bull') bullUpdate(wdt, d);
+  if (S.mode === 'play' && S.hack.phase !== 'off') hackUpdate(wdt, d);
+  if (S.mode === 'play' && S.cold.phase !== 'off') coldUpdate(wdt, d);
+  const icy = S.cold.phase === 'on';
+  if (S.mode === 'play' && S.rug.phase === 'off' && !forking){
+    S.cursor -= d.speed * wdt;
+    while (S.cursor < SPAWN_Z){
+      const dd = icy ? Object.assign({}, d, { gap:d.gap * 1.3 }) : d;   // a little more room on the ice
+      const len = spawnPattern(S.cursor, dd);
+      if (Math.random() < (S.meme > 0 ? 1 : icy ? 0.75 : 0.6) && dd.gap > 0.55){
+        const l = R(3) - 1, n = icy ? 2 + R(3) : 3 + R(3);
+        for (let i = 0; i < n; i++){
+          S.objs.push({ type:'frag', x:l, h:0, z:S.cursor + (len + dd.gap * (0.25 + 0.55 * i / n)) * d.speed });
+        }
+      }
+      if (icy) for (const o of S.objs) if (o.type === 'frag' && o.z > S.cursor - 2) o.type = 'gem';
+      if (S.t >= S.memeAt && S.cold.phase === 'off' && !S.objs.some(o => o.type === 'meme')){
+        S.objs.push({ type:'meme', x:S.lastFr - 1, z:S.cursor + (len + d.gap * 0.5) * d.speed, h:0.45 });
+        S.memeAt = S.t + 32 + R(16);
+      }
+      S.cursor += (len + dd.gap) * d.speed;
+    }
+    const quiet = S.meme <= 0 && !S.objs.some(o => o.type === 'meme');
+    const evFree = S.halv.phase === 'off' && S.rug.phase === 'off' && S.hack.phase === 'off' && S.cold.phase === 'off';
+    if (S.t >= S.rugAt && quiet && evFree) startScan();
+    else if (S.t >= S.halvAt && quiet && evFree) startHalving();
+    else if (S.t >= S.coldAt && quiet && evFree) startCold();
+    else if (S.t >= S.hackAt && quiet && evFree) startHack();
+  }
+
+  // objects
+  const pts0 = S.bonus + S.frags * 25;
+  if (S.mode === 'play' && S.mult > 1) S.dextra += d.speed * wdt * (S.mult - 1);
+  for (const o of S.objs){
+    const prevZ = o.z;
+    o.z -= d.speed * wdt;
+    if (o.type === 'scan'){
+      // hover just ahead of the player while scanning, then fly past
+      if (!o.done && o.z <= RUG_HOVER){
+        o.z = RUG_HOVER; o.hold += wdt;
+        if (o.hold >= RUG_SCAN){ o.done = true; startWarn(); }
+      }
+    } else if (o.type === 'fork'){
+      if (S.mode === 'play'){
+        const front = o.z - o.len / 2, back = o.z + o.len / 2;
+        if (!o.committed && front <= 0) commitFork(o);
+        if (o.committed && !o.done && back < 0){ o.done = true; resolveHalving(o, d); }
+      }
+    } else if (o.type === 'hole'){
+      if (o.state === 'crack' && o.z / d.speed < 0.85){ o.state = 'fall'; o.fallT = 0; }
+      else if (o.state === 'fall'){ o.fallT += wdt; if (o.fallT >= 0.3) o.state = 'gone'; }
+    }
+    if (o.type === 'val' && !o.locked){
+      o.x += (player.x - o.x) * Math.min(1, wdt * 4);
+      if (o.z < d.speed * 1.05){ o.locked = true; o.x = Math.round(o.x); }
+    }
+    if (S.mode === 'play') collide(o, prevZ);
+  }
+  S.objs = S.objs.filter(o => o.z + (o.len ? o.len / 2 : 0) > -6 && !o.gone);
+  { const gain = S.bonus + S.frags * 25 - pts0 - S.noMult; S.noMult = 0; if (S.mult > 1 && gain > 0) S.bonus += Math.round(gain * (S.mult - 1)); }
+
+  S.score = scoreNow();
+  updateEscort(wdt);
+
+  S.logT -= wdt;
+  if (S.logT < -4){ S.logT = 6 + Math.random() * 6; S.logI = (S.logI + 1 + R(LOGS.length - 1)) % LOGS.length; }
+}
+
+/* ---------- Rug Pull ----------
+   scan   a green drone hovers ahead and scans the player (the one thing it cannot be dodged)
+   warn   five second countdown, no new hazards, a few fragments to keep busy
+   pull   rows of floor tiles crack and then drop away. Every row leaves at least one safe lane, and
+          rows are spaced far enough apart that two lane changes always fit between them.
+   Cracked tiles are visible from the far end of the track, so the warning is the cracks themselves. */
+function startScan(){
+  const rg = S.rug;
+  rg.phase = 'scan'; rg.t = 0; rg.rows = 0; S.prevF = null;
+  S.objs.push({ type:'scan', x:0, z:Math.max(S.cursor, SPAWN_Z) + 10, hold:0, done:false });
+  S.cursor = SPAWN_Z;
+}
+function startWarn(){
+  const rg = S.rug;
+  rg.phase = 'warn'; rg.t = 0; rg.fragT = 0.3;
+  S.flash = 0.5; S.flashColor = '#3dff9a'; S.shake = 0.25;
+}
+function rugUpdate(dt, d){
+  const rg = S.rug;
+  S.cursor = SPAWN_Z;
+  if (rg.phase === 'scan') return;
+  rg.t += dt;
+  if (rg.phase === 'warn'){
+    rg.fragT -= dt;
+    if (rg.fragT <= 0){
+      rg.fragT = 0.9;
+      const l = R(3) - 1;
+      for (let i = 0; i < 4; i++) S.objs.push({ type:'frag', x:l, h:0, z:SPAWN_Z + i * 5 });
+    }
+    if (rg.t >= RUG_WARN){
+      rg.phase = 'pull'; rg.t = 0; rg.rows = 0; rg.spawnT = 0.2;
+      S.flash = 0.6; S.flashColor = C.danger; S.shake = 0.5;
+    }
+  } else if (rg.phase === 'pull'){
+    rg.spawnT -= dt;
+    if (rg.rows < RUG_ROWS && rg.spawnT <= 0){
+      spawnHoleRow();
+      rg.rows++;
+      rg.spawnT = Math.max(0.85, 1.3 - rg.rows * 0.035);
+    }
+    if (rg.rows >= RUG_ROWS && !S.objs.some(o => o.type === 'hole')) endRug(d);
+  }
+}
+function spawnHoleRow(){
+  const rg = S.rug;
+  const holes = [];
+  let safe;
+  if (Math.random() < 0.5){            // two lanes drop, one safe lane
+    safe = R(3);
+    for (let l = 0; l < 3; l++) if (l !== safe) holes.push(l - 1);
+  } else {                             // one lane drops
+    const h = R(3);
+    holes.push(h - 1);
+    safe = others(h)[R(2)];
+  }
+  rg.safe = safe;
+  S.objs.push({ type:'hole', lanes:holes, z:SPAWN_Z, len:RUG_TILE, state:'crack', fallT:0, id:rg.rows, paid:false });
+  // a couple of fragments in the safe lane, just behind the row
+  for (let i = 0; i < 2; i++) S.objs.push({ type:'frag', x:safe - 1, h:0, z:SPAWN_Z + 8 + i * 4 });
+}
+function endRug(d){
+  const rg = S.rug;
+  rg.phase = 'off';
+  S.bonus += 300; S.flash = 0.5; S.flashColor = C.cyan;
+  const [x, y] = proj(player.x, 0, 0);
+  addText('RUG PULL SURVIVED +300', cx, horizonY + (groundY - horizonY) * 0.3, C.cyan, 1.8, 1.4);
+  burst(x, y - L * 0.26, C.cyan, 30, 300);
+  S.rugAt = S.t + 45 + R(25);
+  S.halvAt = Math.max(S.halvAt, S.t + 10);
+  S.hackAt = Math.max(S.hackAt, S.t + 10);
+  S.coldAt = Math.max(S.coldAt, S.t + 10);
+  S.cursor = SPAWN_Z + 1.0 * d.speed;   // a breather before normal hazards return
+}
+
+/* ---------- The Halving ----------
+   warn   five second countdown, no new hazards
+   fork   the road splits into two chains with a void between them. One chain is the longest (bright, steady
+          fragment trail, taller height sign), the other is an orphan (dim, flickering, ghost blocks).
+          Whichever side you are on when the split reaches you is the chain you are committed to.
+   after  longest chain: +300 and a triple speed bull run. Orphan chain: your score is halved, then a double bull run.
+   Nothing in the fork can kill you, so the only thing at stake is points. */
+const scoreNow = () => Math.floor(S.dist + S.dextra + S.frags * 25 + S.bonus - S.penalty - S.frozen);
+
+function startHalving(){
+  const h = S.halv;
+  h.phase = 'warn'; h.t = 0; h.fragT = 0.4; h.zone = null; h.branch = 0; S.prevF = null;
+  S.flash = 0.5; S.flashColor = C.amber; S.shake = 0.25;
+}
+function spawnFork(d){
+  const h = S.halv;
+  const len = Math.round(d.speed * HALV_TIME);
+  const real = Math.random() < 0.5 ? -1 : 1;
+  // keep the split clear of anything already queued up
+  let front = SPAWN_Z + 4;
+  for (const o of S.objs) if (o.type === 'block' || o.type === 'fire' || o.type === 'val') front = Math.max(front, o.z + 8);
+  S.objs = S.objs.filter(o => o.type !== 'frag' || o.z < front - 2);
+  const zone = { type:'fork', z:front + len / 2, len, real, id:++S.forkId, committed:false, done:false, height:812000 + R(900) };
+  S.objs.push(zone);
+  h.zone = zone; h.phase = 'fork'; h.t = 0; h.total = (front + len) / d.speed;
+  // the longest chain carries a steady trail of fragments
+  // ground runs broken up by arcs of air fragments, so there is something to do while you wait for the merge
+  const n = Math.min(44, Math.floor((len - 8) / 5));
+  for (let i = 0; i < n; i++) S.objs.push({ type:'frag', x:real, h:(i % 9) >= 6 ? 1.0 : 0, z:front + 5 + i * 5 });
+}
+function halvUpdate(dt, d){
+  const h = S.halv;
+  S.cursor = SPAWN_Z;
+  h.t += dt;
+  if (h.phase === 'warn'){
+    h.fragT -= dt;
+    if (h.fragT <= 0){
+      h.fragT = 1.1;
+      const l = R(3) - 1;
+      for (let i = 0; i < 3; i++) S.objs.push({ type:'frag', x:l, h:0, z:SPAWN_Z + i * 5 });
+    }
+    if (h.t >= HALV_WARN) spawnFork(d);
+  }
+}
+function commitFork(o){
+  const h = S.halv;
+  o.committed = true;
+  let l = player.lane;
+  if (l === 0){
+    l = Math.abs(player.x) > 0.08 ? Math.sign(player.x) : (player.lastDir || 1);
+    player.lane = l; player.lastSwitch = S.t;
+    const [x, y] = proj(player.x, 0, 0);
+    addText('NUDGED ' + (l < 0 ? 'LEFT' : 'RIGHT'), x, y - L * 0.9, C.dim, 1, 1);
+  }
+  h.branch = l;
+}
+function resolveHalving(o, d){
+  const h = S.halv;
+  const ok = h.branch === o.real;
+  const [x, y] = proj(player.x, 0, 0);
+  const my = horizonY + (groundY - horizonY) * 0.3;
+  S.forks++;
+  h.zone = null; h.phase = 'bull'; h.t = 0; S.bullT = BULL_DUR;
+  S.cursor = SPAWN_Z + 1.0 * d.speed;
+  h.rev = REV_TIME; h.revOk = ok; h.revPen = 0; h.penLeft = 0; h.revCur = Math.max(0, scoreNow());
+  { const [ox, oy] = proj(-o.real, 0.3, 5); burst(ox, oy, '#8d87b6', 36, 300); burst(ox, oy, ok ? C.dim : C.danger, 18, 220); }
+  if (ok){
+    S.bonus += 300; S.noMult += 300;   // the +300 itself is not multiplied by the bull run it starts
+    S.mult = 3;
+    S.flash = 0.6; S.flashColor = C.cyan; S.shake = 0.3;
+    burst(x, y - L * 0.26, C.cyan, 34, 340);
+  } else {
+    const cur = Math.max(0, scoreNow() - S.vault);   // the cold storage vault is never halved
+    const half = Math.floor(cur / 2);
+    h.penLeft = h.revPen = cur - half;   // taken off over the reveal rather than in one jump
+    S.halvings++;
+    S.mult = 2;
+    S.flash = 0.8; S.flashColor = C.danger; S.shake = 0.7;
+    burst(x, y - L * 0.26, C.danger, 40, 360);
+  }
+}
+function bullUpdate(dt, d){
+  const h = S.halv;
+  S.bullT -= dt;
+  if (h.rev > 0) h.rev -= dt;
+  if (h.penLeft > 0){ const c = Math.min(h.penLeft, Math.max(1, h.revPen * dt / 1.4)); h.penLeft -= c; S.penalty += c; if (h.penLeft < 1){ S.penalty += h.penLeft; h.penLeft = 0; } }
+  // green and gold candles rising up the screen
+  if (Math.random() < dt * 14) addPart(Math.random() * W, H + 6, (Math.random() - .5) * 30, 260 + Math.random() * 220, Math.random() < 0.5 ? '#ffd64d' : '#3dff9a', 1.1 + Math.random() * 0.6);
+  if (S.bullT <= 0){
+    S.mult = 1; h.phase = 'off'; h.t = 0; h.rev = 0;
+    S.halvAt = S.t + 95 + R(40);
+    S.rugAt = Math.max(S.rugAt, S.t + 10);
+    S.hackAt = Math.max(S.hackAt, S.t + 10);
+    S.coldAt = Math.max(S.coldAt, S.t + 10);
+    addText('BULL RUN OVER', cx, horizonY + (groundY - horizonY) * 0.3, C.dim, 1.3, 1.1);
+  }
+}
+
+/* ---------- Cold Storage ----------
+   warn   three seconds of notice, the road starts to frost over
+   on     the score freezes and the road turns to ice, so lane changes slide past and settle back.
+          Fragments become gems. Each gem moves GEM_PCT of the current score into the vault, up to half the score.
+   The vault is never halved by the Halving and a hack hit cannot touch it. */
+function startCold(){
+  const c = S.cold;
+  c.phase = 'warn'; c.t = 0; c.gems = 0; c.banked = 0; S.colds++;
+  S.flash = 0.4; S.flashColor = '#bfefff'; S.shake = 0.2;
+}
+function coldUpdate(dt, d){
+  const c = S.cold;
+  c.t += dt;
+  if (c.phase === 'warn'){
+    if (c.t >= COLD_WARN){
+      c.phase = 'on'; c.t = 0; S.flash = 0.5; S.flashColor = '#e6f9ff'; S.shake = 0.3;
+      for (const o of S.objs) if (o.type === 'frag') o.type = 'gem';
+    }
+    return;
+  }
+  if (Math.random() < dt * 22) addPart(Math.random() * W, -6, (Math.random() - .5) * 40, -(30 + Math.random() * 40), Math.random() < 0.7 ? '#ffffff' : '#bfefff', 1.4 + Math.random());
+  if (c.t >= COLD_TIME){
+    c.phase = 'off'; c.t = 0;
+    for (const o of S.objs) if (o.type === 'gem') o.type = 'frag';
+    S.flash = 0.5; S.flashColor = '#bfefff';
+    addText(c.banked > 0 ? 'VAULT SEALED  ' + c.banked.toLocaleString() + ' BANKED' : 'VAULT SEALED', cx, horizonY + (groundY - horizonY) * 0.3, '#bfefff', 2, 1.3);
+    S.coldAt = S.t + 80 + R(30);
+    S.rugAt = Math.max(S.rugAt, S.t + 10);
+    S.halvAt = Math.max(S.halvAt, S.t + 10);
+    S.hackAt = Math.max(S.hackAt, S.t + 10);
+  }
+}
+function bankGem(sx, sy){
+  const c = S.cold, score = Math.max(0, scoreNow());
+  const room = Math.max(0, Math.floor(score / 2) - S.vault);
+  const amt = Math.min(room, Math.max(1, Math.floor(score * GEM_PCT)));
+  c.gems++;
+  if (amt <= 0){ addText('VAULT FULL', sx + L * 0.35, sy, '#bfefff', 0.8); return; }
+  S.vault += amt; c.banked += amt;
+  addText('+' + amt.toLocaleString() + ' BANKED', sx + L * 0.35, sy, '#bfefff', 0.8);
+  S.vaultPulse = 0.4;
+}
+
+/* ---------- The Hack ----------
+   warn   three seconds of notice, the screen starts to break up
+   on     the screen is full of static and phantom hazards. Phantoms flicker and tear; real hazards hold still.
+          A real hit does not end the run, it costs HACK_HIT points. Real hazards still follow the fair patterns.
+   Walking through a phantom is worth a few points, surviving to the end is worth a bonus. */
+function startHack(){
+  const h = S.hack;
+  h.phase = 'warn'; h.t = 0; h.fakeT = 0.3; S.hacks++;
+  S.flash = 0.4; S.flashColor = '#ff2bd6'; S.shake = 0.3;
+}
+function hackUpdate(dt, d){
+  const h = S.hack;
+  h.t += dt;
+  if (h.phase === 'warn'){
+    if (h.t >= HACK_WARN){ h.phase = 'on'; h.t = 0; h.fakeT = 0.2; S.flash = 0.5; S.flashColor = '#ff2bd6'; S.shake = 0.4; }
+    return;
+  }
+  h.fakeT -= dt;
+  if (h.fakeT <= 0 && h.t < HACK_TIME - 1.2){
+    h.fakeT = 0.45 + Math.random() * 0.75;
+    const z = SPAWN_Z + 2;
+    // keep phantoms off the real hazards so the two are never stacked
+    if (!S.objs.some(o => (o.type === 'block' || o.type === 'fire' || o.type === 'val') && Math.abs(o.z - z) < 9)){
+      if (Math.random() < 0.7) S.objs.push({ type:'phantom', kind:'block', x:R(3) - 1, z, seed:Math.random() * 100 });
+      else { const l = R(3) - 1; S.objs.push({ type:'phantom', kind:'fire', lanes:Math.random() < 0.4 ? [l, Math.max(-1, Math.min(1, l + (Math.random() < 0.5 ? 1 : -1)))] : [l], z, seed:Math.random() * 100 }); }
+    }
+  }
+  if (h.t >= HACK_TIME){
+    h.phase = 'off'; h.t = 0;
+    S.bonus += 200; S.flash = 0.5; S.flashColor = C.cyan;
+    const [x, y] = proj(player.x, 0, 0);
+    addText('SYSTEM RESTORED +200', cx, horizonY + (groundY - horizonY) * 0.3, C.cyan, 1.8, 1.4);
+    burst(x, y - L * 0.26, C.cyan, 30, 300);
+    S.hackAt = S.t + 70 + R(30);
+    S.rugAt = Math.max(S.rugAt, S.t + 10);
+    S.halvAt = Math.max(S.halvAt, S.t + 10);
+    S.coldAt = Math.max(S.coldAt, S.t + 10);
+    S.cursor = Math.max(S.cursor, SPAWN_Z + 0.8 * d.speed);
+    S.objs = S.objs.filter(o => o.type !== 'phantom');
+  }
+}
+// a real hit: normally the end of the run, but during the hack it costs points and the run carries on
+function hurt(kind, o){
+  if (S.hack.phase !== 'on') return die(kind);
+  if (S.grace > 0) return;
+  o.gone = true;
+  const amt = Math.min(HACK_HIT, Math.max(0, scoreNow() - S.vault));   // a hack cannot reach the vault
+  S.penalty += amt; S.hackHits++; S.grace = 0.9; S.shake = 0.7; S.flash = 0.6; S.flashColor = C.danger;
+  const [x, y] = proj(player.x, player.h, 0);
+  addText('-' + amt.toLocaleString(), x, y - L * 0.9, C.danger, 1.4, 1.7);
+  burst(x, y - L * 0.26, C.danger, 26, 320); burst(x, y - L * 0.26, '#ff2bd6', 16, 240);
+}
+
+function collide(o, prevZ){
+  const dx = Math.abs(player.x - (o.x ?? 0));
+  const [sx, sy] = proj(player.x, player.h, 0);
+  const coinY = sy - L * 0.26;
+  const meme = S.meme > 0;
+  const safe = S.ghost > 0 || S.grace > 0;
+  // swept test so a long frame cannot tunnel through an object
+  const crossed = (w) => o.z < w && prevZ > -w;
+
+  if (o.type === 'frag'){
+    if (crossed(0.8) && dx < (meme ? 1.3 : 0.6) && Math.abs(player.h - o.h) < 0.8){
+      o.gone = true; S.frags++;
+      if (meme) S.bonus += 25;
+      if (S.ghost <= 0){
+        const wasFull = S.meter >= METER_MAX;
+        S.meter = Math.min(METER_MAX, S.meter + 1);
+        if (!wasFull && S.meter >= METER_MAX) addText('GHOST READY', sx, coinY - L * 0.7, C.violet, 1.3, 1.2);
+      }
+      burst(sx, coinY, meme ? CONFETTI[R(CONFETTI.length)] : C.cyan, 8, 150);
+      addText(meme ? '+50' : (Math.random() < 0.07 ? '+25  (gas fee: 24.99)' : '+25'), sx + L * 0.35, coinY, meme ? C.amber : C.cyan, 0.7);
+    }
+    return;
+  }
+
+  if (o.type === 'gem'){
+    if (crossed(0.8) && dx < 0.6 && Math.abs(player.h - o.h) < 0.8){
+      o.gone = true;
+      burst(sx, coinY, '#e6f9ff', 10, 170);
+      bankGem(sx, coinY);
+    }
+    return;
+  }
+
+  if (o.type === 'meme'){
+    if (crossed(0.9) && dx < 0.75 && Math.abs(player.h - o.h) < 1.1){
+      o.gone = true; S.meme = MEME_DUR; S.bonus += 100;
+      S.flash = 0.7; S.flashColor = '#ff5fd2'; S.shake = 0.35;
+      S.parts.push({ ring:true, x:sx, y:coinY, life:0.7, max:0.7, color:C.amber });
+      burst(sx, coinY, '#ff5fd2', 30, 380); burst(sx, coinY, C.amber, 24, 300);
+      addText('MEME MODE!', cx, horizonY + (groundY - horizonY) * 0.35, C.amber, 1.5, 1.8);
+    }
+    return;
+  }
+
+  if (o.type === 'phantom'){
+    const inLane = o.kind === 'block' ? dx < 0.55 : o.lanes.some(l => Math.abs(player.x - l) < 0.55);
+    if (!o.gone && crossed(0.5) && inLane && (o.kind === 'block' || player.h < 0.62)){
+      o.gone = true; S.bonus += 15;
+      addText('PHANTOM +15', sx, coinY - L * 0.6, '#ff2bd6', 0.8);
+      burst(sx, coinY, '#ff2bd6', 10, 200);
+    }
+    return;
+  }
+  if (o.type === 'scan') return;
+  if (o.type === 'hole'){
+    if (!o.paid && o.z + o.len / 2 < -0.2){ o.paid = true; S.bonus += 50; addText('SAFE +50', sx, coinY - L * 0.6, C.cyan, 0.7); }
+    if (o.state === 'crack' || (o.state === 'fall' && o.fallT < 0.25)) return;
+    const over = o.z - o.len / 2 < 0 && prevZ + o.len / 2 > 0;
+    if (over && player.h < 0.2 && !safe && !meme && o.lanes.some(l => Math.abs(player.x - l) < 0.5)) die('rug');
+    return;
+  }
+
+  // near miss: hazard passes in the adjacent lane just after a lane change
+  if ((o.type === 'block' || o.type === 'val') && prevZ > 0 && o.z <= 0 && dx > 0.6 && dx < 1.3 && S.t - player.lastSwitch < 0.4 && !o.gone){
+    S.bonus += 30; addText('CLOSE CALL +30', sx, coinY - L * 0.6, C.amber, 0.9);
+  }
+
+  if (o.type === 'block' && crossed(0.5) && dx < 0.55 && !o.gone){
+    if (safe) return;
+    if (meme || S.dashT > 0){
+      o.gone = true; S.bonus += meme ? 20 : 50; S.shake = 0.3;
+      const [bx, by] = proj(o.x, 0.75, o.z);
+      burst(bx, by, meme ? CONFETTI[R(CONFETTI.length)] : C.violet, 26, 320); burst(bx, by, '#ff5fd2', 12, 220);
+      addText(meme ? 'HONK! +20' : 'SMASHED +50', bx, by - L * 0.5, '#ff5fd2', 1);
+      return;
+    }
+    hurt('block', o);
+  } else if (o.type === 'fire' && crossed(0.5) && !o.gone){
+    const hit = o.lanes.some(l => Math.abs(player.x - l) < 0.55);
+    if (!hit || safe) return;
+    if (meme){
+      o.gone = true; S.bonus += 20; S.shake = 0.3;
+      for (const l of o.lanes){
+        const [bx, by] = proj(l, 0.3, o.z);
+        burst(bx, by, CONFETTI[R(CONFETTI.length)], 14, 300);
+      }
+      addText('HONK! +20', sx, coinY - L * 0.6, C.amber, 0.9);
+      return;
+    }
+    if (player.h >= 0.62) return;
+    hurt('fire', o);
+  } else if (o.type === 'val' && o.locked && crossed(0.6) && dx < 0.5){
+    if (safe || meme) return;
+    hurt('val', o);
+  }
+}
+
+function updateEscort(dt){
+  if (S.escort){
+    S.escort.x += dt / 7;
+    if (S.escort.x > 1.2) S.escort = null;
+  } else {
+    S.escortT -= dt;
+    if (S.escortT <= 0){
+      S.escort = { x:-0.2, dir:Math.random() < 0.5 ? 1 : -1 };
+      S.escortT = 22 + Math.random() * 18;
+      if (S.mode === 'play'){ S.logI = 1; S.logT = 0.01; }
+    }
+  }
+}
+
+/* ---------- rendering ---------- */
+function quad(a, b, c, d){ ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.closePath(); }
+
+/* ---------- circus theme helpers ---------- */
+let CIR = 0; // 0 = prison, 1 = circus (flickers during the last second and a half of Meme mode)
+function rgb(h){ const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
+function mixc(a, b, t, al = 1){
+  const x = rgb(a), y = rgb(b);
+  return `rgba(${Math.round(x[0] + (y[0] - x[0]) * t)},${Math.round(x[1] + (y[1] - x[1]) * t)},${Math.round(x[2] + (y[2] - x[2]) * t)},${al})`;
+}
+
+function drawSky(){
+  const g = ctx.createLinearGradient(0, 0, 0, horizonY);
+  g.addColorStop(0, mixc('#05040b', '#2b0a3f', CIR)); g.addColorStop(1, mixc('#170c33', '#ff6a3d', CIR));
+  ctx.fillStyle = g; ctx.fillRect(-W * 0.5, -H * 0.5, W * 2, horizonY + H * 0.5 + 2);
+  ctx.fillStyle = mixc('#06050d', '#1d0820', CIR); ctx.fillRect(-W * 0.5, horizonY, W * 2, H * 1.5);
+  // the exit: a light at the vanishing point
+  const pulse = 0.85 + 0.15 * Math.sin(S.anim * 2);
+  const ex = proj(0, 0, SPAWN_Z)[0];
+  const rg = ctx.createRadialGradient(ex, horizonY, 0, ex, horizonY, L * 1.6 * pulse);
+  rg.addColorStop(0, 'rgba(255,214,140,.55)'); rg.addColorStop(0.25, 'rgba(255,140,80,.18)'); rg.addColorStop(1, 'rgba(163,91,255,0)');
+  ctx.fillStyle = rg; ctx.fillRect(ex - L * 2, horizonY - L * 2, L * 4, L * 4);
+}
+
+function drawSpots(){
+  if (CIR < 0.03) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 3; i++){
+    const sx = cx + (i - 1) * L * 1.1, sy = -10;
+    const tx = cx + Math.sin(S.anim * 0.9 + i * 2) * L * 1.2, ty = groundY;
+    const g = ctx.createLinearGradient(sx, sy, tx, ty);
+    g.addColorStop(0, `hsla(${(S.anim * 60 + i * 120) % 360},100%,70%,${0.11 * CIR})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.beginPath();
+    ctx.moveTo(sx - 8, sy); ctx.lineTo(sx + 8, sy); ctx.lineTo(tx + L * 0.45, ty); ctx.lineTo(tx - L * 0.45, ty); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawFloor(){
+  const far = SPAWN_Z, near = -4;
+  const g = ctx.createLinearGradient(0, horizonY, 0, H);
+  g.addColorStop(0, mixc('#0d0924', '#3a0d2a', CIR)); g.addColorStop(1, mixc('#1a1040', '#6b1d3a', CIR));
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  for (let z = far; z >= near; z -= 2){ const q = proj(-FLOOR_X, 0, z); if (z === far) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1]); }
+  for (let z = near; z <= far; z += 2){ const q = proj(FLOOR_X, 0, z); ctx.lineTo(q[0], q[1]); }
+  ctx.closePath(); ctx.fill();
+
+  const step = 4, off = S.dist % step, base = Math.floor(S.dist / step);
+  // big top stripes on the floor while the circus is in town
+  if (CIR > 0.02){
+    for (let i = 0; i * step - off < far; i++){
+      const z = i * step - off;
+      if (z + step < -3 || ((base + i) & 1)) continue;
+      quad(proj(-FLOOR_X, 0, z), proj(FLOOR_X, 0, z), proj(FLOOR_X, 0, z + step), proj(-FLOOR_X, 0, z + step));
+      ctx.fillStyle = `rgba(255,244,214,${0.05 * CIR})`; ctx.fill();
+    }
+  }
+  // cross lines (block boundaries)
+  ctx.lineWidth = 1;
+  for (let z = -off; z < far; z += step){
+    if (z < -3) continue;
+    const p = P(z), a = proj(-FLOOR_X, 0, z), b = proj(FLOOR_X, 0, z);
+    ctx.strokeStyle = mixc('#a35bff', '#ffb23e', CIR, Math.min(0.5, 0.06 + 0.32 * p));
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+  }
+  // lane dividers, dashed and moving
+  const dstep = 3, doff = S.dist % dstep;
+  for (const x of [-0.5, 0.5]){
+    for (let z = -doff; z < far; z += dstep){
+      if (z < -3) continue;
+      const a = proj(x, 0, z), b = proj(x, 0, z + 1.5);
+      ctx.strokeStyle = mixc('#3ef0ff', '#ffe14a', CIR, 0.1 + 0.4 * P(z));
+      ctx.lineWidth = Math.max(1, 2.2 * P(z));
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+  }
+  // floor edges
+  ctx.lineWidth = 2;
+  for (const x of [-FLOOR_X, FLOOR_X]){
+    const a = proj(x, 0, far), b = proj(x, 0, near);
+    const eg = ctx.createLinearGradient(a[0], a[1], b[0], b[1]);
+    eg.addColorStop(0, mixc('#3ef0ff', '#ff5fd2', CIR, 0)); eg.addColorStop(1, mixc('#3ef0ff', '#ff5fd2', CIR, 0.8));
+    ctx.strokeStyle = eg; ctx.beginPath();
+    for (let z = far; z >= near; z -= 2){ const q = proj(x, 0, z); if (z === far) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1]); }
+    ctx.stroke();
+  }
+}
+
+const CIRCUS_LABELS = ['HONK', 'FREE ENTRY', 'NO GAS FEES', 'ALL ABOARD', 'HODL & ROLL'];
+
+function drawBunting(z, p){
+  if (CIR < 0.03) return;
+  if (z < 14) return;   // nearest strings would hang right across the screen
+  const WH = 2.9, n = 9, a = Math.min(0.6, 0.15 + p * 0.8) * CIR;
+  const sag = u => WH - 0.28 * Math.sin(Math.PI * u);
+  ctx.strokeStyle = `rgba(255,244,214,${a})`; ctx.lineWidth = Math.max(1, 1.5 * p);
+  ctx.beginPath();
+  for (let i = 0; i <= 24; i++){
+    const u = i / 24, q = proj(-FLOOR_X + 2 * FLOOR_X * u, sag(u), z);
+    if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]);
+  }
+  ctx.stroke();
+  const cols = ['#ff3d6e', '#ffb23e', '#3ef0ff', '#ff5fd2', '#7dff6a'];
+  ctx.globalAlpha = a;
+  for (let i = 0; i < n; i++){
+    const u = (i + 0.5) / n, x = -FLOOR_X + 2 * FLOOR_X * u, h = sag(u);
+    const l = proj(x - 0.11, h, z), r = proj(x + 0.11, h, z), tip = proj(x, h - 0.26, z);
+    ctx.fillStyle = cols[i % cols.length];
+    ctx.beginPath(); ctx.moveTo(l[0], l[1]); ctx.lineTo(r[0], r[1]); ctx.lineTo(tip[0], tip[1]); ctx.closePath(); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawTunnel(){
+  const seg = 7, off = S.dist % seg, base = Math.floor(S.dist / seg);
+  const WH = 2.6, ROOF = 3.4;
+  for (let i = Math.ceil(SPAWN_Z / seg); i >= 0; i--){
+    const z = i * seg - off;
+    if (z < -3) continue;
+    const z2 = z + seg * 0.78, p = P(z);
+    const idx = base + i;
+    for (const side of [-1, 1]){
+      const x = side * FLOOR_X;
+      const a = proj(x, 0, z), b = proj(x, WH, z), c = proj(x, WH, z2), d = proj(x, 0, z2);
+      quad(a, b, c, d);
+      ctx.fillStyle = mixc('#1c1040', (idx & 1) ? '#e0a93f' : '#c1272d', CIR * 0.55, 0.55 + 0.4 * p); ctx.fill();
+      ctx.strokeStyle = mixc('#3ef0ff', '#ffe14a', CIR, 0.08 + 0.5 * p); ctx.lineWidth = Math.max(1, 1.5 * p); ctx.stroke();
+      // chain link to next block
+      const m1 = proj(x, WH / 2, z2), m2 = proj(x, WH / 2, z + seg);
+      ctx.strokeStyle = `rgba(255,178,62,${0.12 + 0.5 * p})`;
+      ctx.beginPath(); ctx.moveTo(m1[0], m1[1]); ctx.lineTo(m2[0], m2[1]); ctx.stroke();
+      // block label
+      if (p > 0.22){
+        const mid = proj(x, WH * 0.62, (z + z2) / 2);
+        const party = CIR > 0.5;
+        ctx.fillStyle = party ? ((idx & 1) ? '#3a0f2a' : '#fff4d6') : `rgba(141,135,182,${Math.min(0.9, p)})`;
+        ctx.font = `600 ${Math.round(Math.max(8, 13 * p))}px ${FONT_M}`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(party ? CIRCUS_LABELS[idx % CIRCUS_LABELS.length] : '#' + (800000 + idx), mid[0], mid[1]);
+        if ((idx % 5) === 0){
+          const m3 = proj(x, WH * 0.38, (z + z2) / 2);
+          ctx.fillStyle = party ? ((idx & 1) ? '#3a0f2a' : '#ffe14a') : `rgba(255,178,62,${Math.min(0.9, p)})`;
+          ctx.fillText(party ? 'FEE 0 GWEI' : 'FEE ' + ((idx * 7919) % 9000 + 1000) + ' GWEI', m3[0], m3[1]);
+        }
+      }
+    }
+    // arch frame
+    const pts = [proj(-FLOOR_X, 0, z), proj(-FLOOR_X, WH, z), proj(-1.1, ROOF, z), proj(1.1, ROOF, z), proj(FLOOR_X, WH, z), proj(FLOOR_X, 0, z)];
+    ctx.strokeStyle = mixc('#a35bff', '#ff5fd2', CIR, 0.1 + 0.45 * p); ctx.lineWidth = Math.max(1, 2.5 * p);
+    ctx.beginPath(); pts.forEach((q, j) => j ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.stroke();
+    drawBunting(z, p);
+  }
+}
+
+const rn = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
+
+function drawHoles(){
+  for (const o of S.objs){
+    if (o.type !== 'hole') continue;
+    const z1 = Math.min(o.z + o.len / 2, SPAWN_Z + 8), z2 = Math.max(o.z - o.len / 2, -4);
+    if (z2 >= z1) continue;
+    const tta = Math.max(0, o.z) / Math.max(1, S.speed);
+    for (const l of o.lanes){
+      const a = proj(l - 0.5, 0, z1), b = proj(l + 0.5, 0, z1), c = proj(l + 0.5, 0, z2), d = proj(l - 0.5, 0, z2);
+      const p = a[2];
+      if (o.state !== 'crack'){
+        // the hole: black with a glowing rim
+        quad(a, b, c, d); ctx.fillStyle = '#010005'; ctx.fill();
+        const g = ctx.createLinearGradient(0, a[1], 0, c[1]);
+        g.addColorStop(0, 'rgba(255,61,110,.5)'); g.addColorStop(0.5, 'rgba(163,91,255,.1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        quad(a, b, c, d); ctx.fillStyle = g; ctx.fill();
+        ctx.strokeStyle = 'rgba(255,61,110,.9)'; ctx.lineWidth = Math.max(1, 2 * p); ctx.stroke();
+      }
+      if (o.state !== 'gone'){
+        const f = o.state === 'fall' ? Math.min(1, o.fallT / 0.3) : 0;
+        ctx.save(); ctx.translate(0, f * 90 * p); ctx.globalAlpha = 1 - f;
+        quad(a, b, c, d); ctx.fillStyle = '#231352'; ctx.fill();
+        const rate = 7 + (1 - Math.min(1, tta / 2)) * 16;
+        quad(a, b, c, d); ctx.fillStyle = `rgba(255,90,40,${0.28 + 0.25 * Math.sin(S.anim * rate + o.id)})`; ctx.fill();
+        // cracks
+        const pt = (u, v) => {
+          const t1x = a[0] + (b[0] - a[0]) * u, t1y = a[1] + (b[1] - a[1]) * u;
+          const t2x = d[0] + (c[0] - d[0]) * u, t2y = d[1] + (c[1] - d[1]) * u;
+          return [t1x + (t2x - t1x) * v, t1y + (t2y - t1y) * v];
+        };
+        ctx.strokeStyle = 'rgba(255,214,150,.95)'; ctx.lineWidth = Math.max(1, 1.6 * p); ctx.lineJoin = 'round';
+        ctx.beginPath();
+        for (let k = 0; k < 4; k++){
+          let u = 0.1 + 0.8 * rn(o.id + l * 3, k), q = pt(u, 0);
+          ctx.moveTo(q[0], q[1]);
+          for (let j = 1; j <= 3; j++){
+            u = Math.max(0.05, Math.min(0.95, u + (rn(o.id + l * 3 + j, k + 7) - 0.5) * 0.5));
+            q = pt(u, j / 3); ctx.lineTo(q[0], q[1]);
+          }
+        }
+        ctx.stroke();
+        quad(a, b, c, d); ctx.setLineDash([6, 5]); ctx.strokeStyle = 'rgba(255,140,60,.9)'; ctx.stroke(); ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+  }
+}
+
+function drawBullRoad(){
+  if (S.bullV < 0.02) return;
+  const rgb = S.mult >= 3 ? '255,214,77' : '255,112,70';
+  const STEP = 5;
+  for (let z = 0; z < 70; z += STEP){
+    const a = S.bullV * (0.05 + 0.15 * Math.max(0, Math.sin(z * 0.14 - S.anim * 7)));
+    quad(proj(-1.5, 0, z + STEP), proj(1.5, 0, z + STEP), proj(1.5, 0, z), proj(-1.5, 0, z));
+    ctx.fillStyle = `rgba(${rgb},${a})`; ctx.fill();
+  }
+  ctx.strokeStyle = `rgba(${rgb},${0.55 * S.bullV})`; ctx.lineWidth = 2;
+  for (const sx of [-1.5, -0.5, 0.5, 1.5]){
+    ctx.beginPath();
+    for (let z = 0; z <= 70; z += STEP){ const q = proj(sx, 0, z); z === 0 ? ctx.moveTo(q[0], q[1]) : ctx.lineTo(q[0], q[1]); }
+    ctx.stroke();
+  }
+}
+
+function drawPhantom(o){
+  if (Math.random() < 0.3) return;   // drops out of existence for a frame, the main tell
+  const p = P(o.z);
+  const draw = () => o.kind === 'block' ? drawBlock({ type:'block', x:o.x, z:o.z, seed:o.seed }) : drawFirewall({ type:'fire', lanes:o.lanes, z:o.z });
+  ctx.save();
+  ctx.globalAlpha = 0.3 + Math.random() * 0.5;
+  ctx.translate((Math.random() - 0.5) * 22 * p, (Math.random() - 0.5) * 6 * p);
+  draw();
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.16;
+  ctx.translate(6 * p, 0); draw();
+  ctx.restore();
+}
+
+// screen interference: tearing, static, scanlines, colour bars. Strength follows S.hackV.
+let scanPat = null;
+function drawHackFx(){
+  const v = S.hackV;
+  if (v < 0.02) return;
+  const w = cv.width, h = cv.height;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const bands = Math.random() < 0.9 ? 1 + Math.floor(Math.random() * 4.5 * v) : 0;
+  for (let i = 0; i < bands; i++){
+    const sh = Math.floor((8 + Math.random() * 34) * DPR), sy = Math.floor(Math.random() * (h - sh));
+    ctx.drawImage(cv, 0, sy, w, sh, Math.round((Math.random() - 0.5) * 110 * v * DPR), sy, w, sh);
+  }
+  if (Math.random() < 0.5 * v){
+    ctx.globalAlpha = 0.1 + Math.random() * 0.12; ctx.fillStyle = Math.random() < 0.5 ? '#ff2bd6' : '#3ef0ff';
+    ctx.fillRect(0, Math.random() * h, w, (2 + Math.random() * 9) * DPR);
+  }
+  // colour fringing: a shifted copy of the whole frame added back on top
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.13 * v;
+  ctx.drawImage(cv, Math.round(5 * DPR * v), 0); ctx.drawImage(cv, -Math.round(5 * DPR * v), 0);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 0.38 * v;
+  const n = Math.floor(220 * v);
+  for (let i = 0; i < n; i++){
+    ctx.fillStyle = Math.random() < 0.5 ? '#ffffff' : '#8a8fb0';
+    const s = (1 + Math.random() * 2.5) * DPR; ctx.fillRect(Math.random() * w, Math.random() * h, s * (1 + Math.random() * 4), s);
+  }
+  if (!scanPat){ const c = document.createElement('canvas'); c.width = 4; c.height = 4; const g = c.getContext('2d'); g.fillStyle = 'rgba(0,0,0,.9)'; g.fillRect(0, 0, 4, 1); scanPat = ctx.createPattern(c, 'repeat'); }
+  ctx.globalAlpha = 0.24 * v; ctx.fillStyle = scanPat; ctx.fillRect(0, 0, w, h);
+  if (Math.random() < 0.012 * v){ ctx.globalAlpha = 0.45; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h); }
+  ctx.restore();
+}
+
+function drawFork(){
+  const o = S.objs.find(q => q.type === 'fork');
+  if (!o) return;
+  const frontZ = o.z - o.len / 2, backZ = o.z + o.len / 2;
+  const zf = Math.min(backZ, SPAWN_Z + 8), zn = Math.max(frontZ, -3);
+  if (zn >= zf) return;
+  const STEP = 4;
+  const k0 = Math.floor((zn - frontZ) / STEP), k1 = Math.ceil((zf - frontZ) / STEP);
+  const seg = k => [Math.max(frontZ + k * STEP, zn), Math.min(frontZ + (k + 1) * STEP, zf)];
+  const flick = Math.floor(S.anim * 9);
+
+  // the void between the chains
+  for (let k = k0; k < k1; k++){
+    const [z1, z2] = seg(k);
+    quad(proj(-0.5, 0, z2), proj(0.5, 0, z2), proj(0.5, 0, z1), proj(-0.5, 0, z1)); ctx.fillStyle = '#010005'; ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(255,178,62,.8)'; ctx.lineWidth = 2;
+  for (const sx of [-0.5, 0.5]){
+    ctx.beginPath();
+    for (let k = k0; k <= k1; k++){ const z = Math.max(zn, Math.min(zf, frontZ + k * STEP)); const q = proj(sx, 0, z); k === k0 ? ctx.moveTo(q[0], q[1]) : ctx.lineTo(q[0], q[1]); }
+    ctx.stroke();
+  }
+
+  for (const l of [-1, 1]){
+    const real = l === o.real;
+    // floor tint
+    for (let k = k0; k < k1; k++){
+      const [z1, z2] = seg(k);
+      if (real){
+        ctx.fillStyle = `rgba(62,240,255,${0.1 + 0.11 * (0.5 + 0.5 * Math.sin(k * 0.9 - S.anim * 7))})`;
+        quad(proj(l - 0.5, 0, z2), proj(l + 0.5, 0, z2), proj(l + 0.5, 0, z1), proj(l - 0.5, 0, z1)); ctx.fill();
+      } else if (rn(k + o.id * 13, flick + l * 3) > 0.4 + 0.5 * Math.max(0, (k - k0) / Math.max(1, k1 - k0) - 0.2)){
+        ctx.fillStyle = 'rgba(141,135,182,.07)';
+        quad(proj(l - 0.5, 0, z2), proj(l + 0.5, 0, z2), proj(l + 0.5, 0, z1), proj(l - 0.5, 0, z1)); ctx.fill();
+      }
+    }
+    // lane edges: solid and bright on the longest chain, dashed and unsteady on the orphan
+    ctx.setLineDash(real ? [] : [6, 9]);
+    ctx.strokeStyle = real ? 'rgba(62,240,255,.95)' : 'rgba(141,135,182,.4)'; ctx.lineWidth = real ? 2.5 : 1.5;
+    for (const sx of [l - 0.5, l + 0.5]){
+      ctx.beginPath();
+      for (let k = k0; k <= k1; k++){ const z = Math.max(zn, Math.min(zf, frontZ + k * STEP)); const q = proj(sx, 0, z); k === k0 ? ctx.moveTo(q[0], q[1]) : ctx.lineTo(q[0], q[1]); }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    // block confirmations on the longest chain, ghost blocks on the orphan
+    for (let k = k0; k < k1; k++){
+      const [z1, z2] = seg(k), zc = (z1 + z2) / 2, q = proj(l, 0, zc), p = q[2];
+      if (real && k % 3 === 0 && p > 0.12){
+        ctx.font = `600 ${Math.round(Math.max(8, 13 * p))}px ${FONT_M}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = `rgba(62,240,255,${Math.min(0.9, p + 0.2)})`;
+        ctx.fillText('✓ #' + (o.height + 3 - Math.floor(k / 3)), q[0], q[1]);
+      } else if (!real && k % 4 === 1 && rn(k + o.id, flick) > 0.25){
+        const a = proj(l - 0.3, 0, zc - 1.2), b = proj(l + 0.3, 0, zc - 1.2), c = proj(l + 0.3, 0.55, zc - 1.2), d2 = proj(l - 0.3, 0.55, zc - 1.2);
+        quad(a, b, c, d2); ctx.fillStyle = 'rgba(141,135,182,.06)'; ctx.fill();
+        ctx.setLineDash([3, 4]); ctx.strokeStyle = 'rgba(141,135,182,.5)'; ctx.lineWidth = 1; ctx.stroke(); ctx.setLineDash([]);
+        if (p > 0.2){
+          ctx.font = `600 ${Math.round(Math.max(7, 11 * p))}px ${FONT_M}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillStyle = 'rgba(141,135,182,.7)'; ctx.fillText('ORPHAN?', q[0], proj(l, 0.28, zc - 1.2)[1]);
+        }
+      }
+    }
+    // chain height sign above the split
+    if (frontZ > 2 && frontZ < SPAWN_Z){
+      const q = proj(l, 1.85, frontZ), p = q[2];
+      if (p > 0.24){
+        ctx.font = `700 ${Math.round(Math.max(8, 14 * p))}px ${FONT_M}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillStyle = real ? 'rgba(62,240,255,.95)' : 'rgba(141,135,182,.75)';
+        ctx.fillText('HEIGHT ' + (o.height + (real ? 3 : 0)).toLocaleString(), q[0], q[1]);
+      }
+    }
+  }
+  // the fork and merge gates
+  for (const [z, label] of [[frontZ, 'FORK'], [backZ, 'MERGE']]){
+    if (z < 1 || z > SPAWN_Z) continue;
+    const a = proj(0, 0, z), b = proj(0, 1.5, z), p = a[2];
+    ctx.strokeStyle = 'rgba(255,178,62,.9)'; ctx.lineWidth = Math.max(2, 5 * p);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    if (p > 0.24){
+      ctx.font = `700 ${Math.round(Math.max(9, 15 * p))}px ${FONT_D}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillStyle = C.amber; ctx.fillText(label, b[0], b[1] - 3);
+    }
+  }
+}
+
+function drawScan(o){
+  const [x, y, p] = proj(0, 3.2, o.z);
+  const r = L * 0.24 * p;
+  if (r < 1) return;
+  const scanning = o.hold > 0 && !o.done;
+  if (scanning){
+    // light cone and a beam sweeping across all three lanes
+    const l = proj(-1.6, 0, o.z), rr = proj(1.6, 0, o.z);
+    const prog = o.hold / RUG_SCAN;
+    const g = ctx.createLinearGradient(0, y, 0, l[1]);
+    g.addColorStop(0, 'rgba(61,255,154,.4)'); g.addColorStop(1, 'rgba(61,255,154,.04)');
+    ctx.beginPath(); ctx.moveTo(x - r * 0.3, y); ctx.lineTo(x + r * 0.3, y); ctx.lineTo(rr[0], rr[1]); ctx.lineTo(l[0], l[1]); ctx.closePath();
+    ctx.fillStyle = g; ctx.fill();
+    const bx = proj(-1.5 + 3 * (0.5 + 0.5 * Math.sin(prog * Math.PI * 3 - Math.PI / 2)), 0, o.z);
+    ctx.strokeStyle = 'rgba(190,255,220,.95)'; ctx.lineWidth = Math.max(2, r * 0.18);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(bx[0], bx[1]); ctx.stroke();
+  }
+  ctx.save(); ctx.translate(x, y + Math.sin(S.anim * 6) * r * 0.06);
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++){ const a = i * Math.PI / 3; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+  ctx.closePath(); ctx.fillStyle = '#06210f'; ctx.fill();
+  ctx.strokeStyle = '#3dff9a'; ctx.lineWidth = Math.max(1, r * 0.12); ctx.stroke();
+  // visor
+  ctx.fillStyle = scanning ? '#eafff3' : '#3dff9a';
+  ctx.fillRect(-r * 0.55, -r * 0.16, r * 1.1, r * 0.32);
+  // spinning ring
+  ctx.strokeStyle = 'rgba(61,255,154,.7)'; ctx.lineWidth = Math.max(1, r * 0.07);
+  ctx.beginPath(); ctx.ellipse(0, 0, r * 1.45, r * 0.4, S.anim * 3, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+  if (p > 0.3 && !scanning && S.rug.phase === 'scan'){
+    ctx.font = `700 ${Math.round(Math.max(9, 12 * p))}px ${FONT_M}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#3dff9a'; ctx.fillText('SCANNER', x, y - r * 1.5);
+  }
+}
+
+function drawEscort(){
+  if (!S.escort) return;
+  const t = S.escort.dir > 0 ? S.escort.x : 1 - S.escort.x;
+  const x = cx - L * 1.4 + t * L * 2.8, y = horizonY - 4;
+  const s = Math.max(5, L * 0.05);
+  const bob = Math.sin(S.anim * 8) * 1.5;
+  // drones
+  for (const off of [-s * 3.4, s * 3.4]){
+    ctx.fillStyle = C.danger;
+    ctx.beginPath(); ctx.arc(x + off, y - s * 1.6 + bob, s * 0.8, 0, Math.PI * 2); ctx.fill();
+  }
+  // the detained meme coin
+  ctx.fillStyle = '#ff8ad8'; ctx.beginPath(); ctx.arc(x, y - s, s, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#3a0a2c';
+  ctx.fillRect(x - s * 0.45, y - s * 1.25, s * 0.2, s * 0.2); ctx.fillRect(x + s * 0.25, y - s * 1.25, s * 0.2, s * 0.2);
+  ctx.beginPath(); ctx.arc(x, y - s * 0.45, s * 0.35, Math.PI * 1.1, Math.PI * 1.9); ctx.strokeStyle = '#3a0a2c'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.font = `600 ${Math.max(8, Math.round(s * 1.2))}px ${FONT_M}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillStyle = 'rgba(255,61,110,.85)'; ctx.fillText('DETAINED', x, y - s * 2.8);
+}
+
+function drawTelegraph(o){
+  if (o.z < -1) return;
+  const lw = 0.42;
+  // follow the bend of the road instead of cutting straight across it
+  const zt = Math.max(o.z, -0.5), zs = [];
+  for (let z = zt; z > -1.5; z -= 2) zs.push(z);
+  zs.push(-1.5);
+  ctx.beginPath();
+  zs.forEach((z, i) => { const q = proj(o.x - lw, 0, z); if (i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); });
+  for (let i = zs.length - 1; i >= 0; i--){ const q = proj(o.x + lw, 0, zs[i]); ctx.lineTo(q[0], q[1]); }
+  ctx.closePath();
+  if (o.locked){
+    const pulse = 0.35 + 0.3 * Math.abs(Math.sin(S.anim * 14));
+    ctx.fillStyle = `rgba(255,61,110,${pulse})`; ctx.fill();
+  } else {
+    ctx.fillStyle = 'rgba(255,61,110,.08)'; ctx.fill();
+    ctx.setLineDash([6, 6]); ctx.lineDashOffset = -S.anim * 40;
+    ctx.strokeStyle = 'rgba(255,61,110,.55)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+
+function drawValidator(o){
+  const [x, y, p] = proj(o.x, 3.0, o.z);
+  const [, fy] = proj(o.x, 0, o.z);
+  const r = L * 0.22 * p;
+  if (r < 1) return;
+  // beam
+  if (o.locked && o.z < 8){
+    const strong = o.z < 1.2;
+    const bw = r * (strong ? 0.9 : 0.25);
+    const g = ctx.createLinearGradient(x - bw, 0, x + bw, 0);
+    g.addColorStop(0, 'rgba(255,61,110,0)'); g.addColorStop(0.5, strong ? 'rgba(255,220,230,.95)' : 'rgba(255,61,110,.7)'); g.addColorStop(1, 'rgba(255,61,110,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - bw, y, bw * 2, fy - y);
+  }
+  // drone body (hexagon)
+  ctx.save(); ctx.translate(x, y + Math.sin(S.anim * 6 + o.z) * r * 0.08);
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++){ const a = Math.PI / 6 + i * Math.PI / 3; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+  ctx.closePath(); ctx.fillStyle = '#2a0b1f'; ctx.fill();
+  ctx.strokeStyle = C.danger; ctx.lineWidth = Math.max(1, r * 0.12); ctx.stroke();
+  // eye tracks the player
+  const look = Math.max(-1, Math.min(1, (player.x - o.x) * 2)) * r * 0.25;
+  ctx.fillStyle = o.locked ? '#fff' : C.danger;
+  ctx.beginPath(); ctx.arc(look, 0, r * 0.3, 0, Math.PI * 2); ctx.fill();
+  // rotor arms
+  ctx.strokeStyle = 'rgba(255,61,110,.7)'; ctx.lineWidth = Math.max(1, r * 0.08);
+  ctx.beginPath(); ctx.moveTo(-r * 1.6, -r * 0.4); ctx.lineTo(-r, -r * 0.2); ctx.moveTo(r * 1.6, -r * 0.4); ctx.lineTo(r, -r * 0.2); ctx.stroke();
+  ctx.restore();
+  if (p > 0.3 && !o.locked){
+    ctx.font = `600 ${Math.round(Math.max(9, 12 * p))}px ${FONT_M}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillStyle = C.danger; ctx.fillText('TRACKING', x, y - r * 1.3);
+  }
+}
+
+function drawBlock(o){
+  const w = 0.4, hgt = 1.5, dz = 0.45;
+  const f1 = proj(o.x - w, 0, o.z - dz), f2 = proj(o.x + w, 0, o.z - dz);
+  const ft = proj(o.x, hgt, o.z - dz)[1];
+  const b1 = proj(o.x - w, 0, o.z + dz), b2 = proj(o.x + w, 0, o.z + dz);
+  const bt = proj(o.x, hgt, o.z + dz)[1], bb = b1[1];
+  const p = f1[2];
+  // side faces (only the one facing the centre is visible)
+  ctx.fillStyle = '#3a0f52';
+  if (o.x - w > 0){ quad([f1[0], ft], [f1[0], f1[1]], [b1[0], bb], [b1[0], bt]); ctx.fill(); }
+  if (o.x + w < 0){ quad([f2[0], ft], [f2[0], f2[1]], [b2[0], bb], [b2[0], bt]); ctx.fill(); }
+  // top face
+  quad([f1[0], ft], [f2[0], ft], [b2[0], bt], [b1[0], bt]); ctx.fillStyle = '#6a2096'; ctx.fill();
+  // front face
+  const fw = f2[0] - f1[0], fh = f1[1] - ft;
+  const g = ctx.createLinearGradient(0, ft, 0, f1[1]);
+  g.addColorStop(0, '#7a1f8c'); g.addColorStop(1, '#2b0a3d');
+  ctx.fillStyle = g; ctx.fillRect(f1[0], ft, fw, fh);
+  ctx.strokeStyle = '#ff5fd2'; ctx.lineWidth = Math.max(1, 2 * p); ctx.strokeRect(f1[0], ft, fw, fh);
+  // corrupted text
+  if (p > 0.18){
+    const glyphs = ['0xDEAD', 'NaN', '0x????', 'ERR', '#REF!', 'null'];
+    ctx.fillStyle = 'rgba(255,200,240,.85)';
+    ctx.font = `700 ${Math.round(Math.max(8, 15 * p))}px ${FONT_M}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(glyphs[Math.floor(o.seed + S.anim * 3) % glyphs.length], f1[0] + fw / 2, ft + fh * 0.45);
+  }
+  // glitch slices
+  if (Math.sin(S.anim * 17 + o.seed) > 0.55){
+    for (let i = 0; i < 3; i++){
+      const sy = ft + fh * ((o.seed * (i + 1) * 0.137 + S.anim * 1.7) % 1);
+      const shift = (Math.sin(S.anim * 40 + i + o.seed) * 0.25) * fw;
+      ctx.fillStyle = i % 2 ? 'rgba(62,240,255,.55)' : 'rgba(255,95,210,.6)';
+      ctx.fillRect(f1[0] + shift, sy, fw, Math.max(1.5, fh * 0.06));
+    }
+  }
+}
+
+function drawFirewall(o){
+  const hgt = 0.62;
+  const ls = o.lanes.slice().sort((a, b) => a - b);
+  for (const l of ls){
+    const a = proj(l - 0.49, 0, o.z), b = proj(l + 0.49, 0, o.z);
+    const top = proj(l, hgt, o.z)[1], p = a[2];
+    const w = b[0] - a[0], h = a[1] - top;
+    const g = ctx.createLinearGradient(0, top, 0, a[1]);
+    g.addColorStop(0, 'rgba(255,178,62,.95)'); g.addColorStop(1, 'rgba(255,61,110,.55)');
+    ctx.fillStyle = g; ctx.fillRect(a[0], top, w, h);
+    // scanning bars
+    ctx.fillStyle = 'rgba(40,8,0,.45)';
+    const bars = 7, bw = w / bars;
+    for (let i = 0; i < bars; i++){
+      const ph = (i + S.anim * 4) % 2 < 1;
+      if (ph) ctx.fillRect(a[0] + i * bw, top + h * 0.15, bw * 0.45, h * 0.85);
+    }
+    ctx.fillStyle = '#fff1d0'; ctx.fillRect(a[0], top - Math.max(1, 2 * p), w, Math.max(2, 3 * p));
+    if (p > 0.35){
+      ctx.fillStyle = '#2a0800'; ctx.font = `700 ${Math.round(Math.max(8, 13 * p))}px ${FONT_D}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('FIREWALL', a[0] + w / 2, top + h * 0.55);
+    }
+  }
+  // pylons at the ends of the span
+  for (const x of [ls[0] - 0.5, ls[ls.length - 1] + 0.5]){
+    const [px, py, p] = proj(x, 0, o.z), pt = proj(x, 0.95, o.z)[1];
+    ctx.fillStyle = '#ffdf9a'; ctx.fillRect(px - 2.5 * p, pt, 5 * p, py - pt);
+    ctx.fillStyle = C.amber; ctx.beginPath(); ctx.arc(px, pt, 5 * p, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function drawFrag(o){
+  const [x, y, p] = proj(o.x, o.h + 0.35, o.z);
+  const s = L * 0.1 * p;
+  if (s < 0.8) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const rg = ctx.createRadialGradient(x, y, 0, x, y, s * 2.4);
+  rg.addColorStop(0, 'rgba(62,240,255,.45)'); rg.addColorStop(1, 'rgba(62,240,255,0)');
+  ctx.fillStyle = rg; ctx.fillRect(x - s * 2.4, y - s * 2.4, s * 4.8, s * 4.8);
+  ctx.restore();
+  const sx = Math.max(0.25, Math.abs(Math.cos(S.anim * 3 + o.z * 0.3)));
+  ctx.beginPath(); ctx.moveTo(x, y - s); ctx.lineTo(x + s * 0.7 * sx, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s * 0.7 * sx, y); ctx.closePath();
+  ctx.fillStyle = '#c9fbff'; ctx.fill(); ctx.strokeStyle = C.cyan; ctx.lineWidth = Math.max(1, 1.5 * p); ctx.stroke();
+}
+
+function drawGem(o){
+  const [x, y, p] = proj(o.x, o.h + 0.38, o.z);
+  const s = L * 0.12 * p;
+  if (s < 0.8) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const rg = ctx.createRadialGradient(x, y, 0, x, y, s * 2.6);
+  rg.addColorStop(0, 'rgba(200,240,255,.5)'); rg.addColorStop(1, 'rgba(200,240,255,0)');
+  ctx.fillStyle = rg; ctx.fillRect(x - s * 2.6, y - s * 2.6, s * 5.2, s * 5.2);
+  ctx.restore();
+  const sx = Math.max(0.3, Math.abs(Math.cos(S.anim * 2.4 + o.z * 0.3)));
+  // a cut gem: flat top, pointed bottom
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.9 * sx, y - s * 0.25); ctx.lineTo(x - s * 0.5 * sx, y - s * 0.8); ctx.lineTo(x + s * 0.5 * sx, y - s * 0.8); ctx.lineTo(x + s * 0.9 * sx, y - s * 0.25); ctx.lineTo(x, y + s); ctx.closePath();
+  ctx.fillStyle = '#e6f9ff'; ctx.fill();
+  ctx.strokeStyle = '#7fd8ff'; ctx.lineWidth = Math.max(1, 1.6 * p); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - s * 0.9 * sx, y - s * 0.25); ctx.lineTo(x + s * 0.9 * sx, y - s * 0.25); ctx.moveTo(x, y + s); ctx.lineTo(x - s * 0.3 * sx, y - s * 0.25); ctx.moveTo(x, y + s); ctx.lineTo(x + s * 0.3 * sx, y - s * 0.25); ctx.stroke();
+}
+function drawIceRoad(){
+  if (S.coldV < 0.02) return;
+  const STEP = 5;
+  for (let z = 0; z < 80; z += STEP){
+    const a = S.coldV * (0.10 + 0.08 * Math.max(0, Math.sin(z * 0.21 + S.dist * 0.02)));
+    quad(proj(-1.5, 0, z + STEP), proj(1.5, 0, z + STEP), proj(1.5, 0, z), proj(-1.5, 0, z));
+    ctx.fillStyle = `rgba(200,236,255,${a})`; ctx.fill();
+  }
+  // frost cracks and glints that slide past with the road
+  ctx.strokeStyle = `rgba(230,249,255,${0.35 * S.coldV})`; ctx.lineWidth = 1;
+  const off = S.dist % 9;
+  for (let i = 0; i < 10; i++){
+    const z = i * 9 - off; if (z < 0) continue;
+    const lx = ((i * 37) % 26) / 10 - 1.3;
+    const a = proj(lx, 0, z), b = proj(lx + 0.25, 0, z + 2), c = proj(lx - 0.15, 0, z + 3);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.moveTo(a[0], a[1]); ctx.lineTo(c[0], c[1]); ctx.stroke();
+  }
+  ctx.strokeStyle = `rgba(191,239,255,${0.6 * S.coldV})`; ctx.lineWidth = 2;
+  for (const sx of [-1.5, 1.5]){
+    ctx.beginPath();
+    for (let z = 0; z <= 80; z += STEP){ const q = proj(sx, 0, z); z === 0 ? ctx.moveTo(q[0], q[1]) : ctx.lineTo(q[0], q[1]); }
+    ctx.stroke();
+  }
+}
+function drawPadlock(x, y, s, col){
+  ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, s * 0.18);
+  ctx.beginPath(); ctx.arc(x + s * 0.5, y + s * 0.45, s * 0.3, Math.PI, 0); ctx.stroke();
+  ctx.fillStyle = col; ctx.fillRect(x + s * 0.1, y + s * 0.45, s * 0.8, s * 0.6);
+}
+
+function drawMeme(o){
+  const [x, y0, p] = proj(o.x, o.h + 0.35, o.z);
+  const r = L * 0.17 * p;
+  if (r < 1) return;
+  const y = y0 + Math.sin(S.anim * 5 + o.z * 0.2) * r * 0.12;
+  const hue = (S.anim * 220) % 360;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const rg = ctx.createRadialGradient(x, y, 0, x, y, r * 3);
+  rg.addColorStop(0, `hsla(${hue},100%,60%,.5)`); rg.addColorStop(1, `hsla(${hue},100%,60%,0)`);
+  ctx.fillStyle = rg; ctx.fillRect(x - r * 3, y - r * 3, r * 6, r * 6);
+  ctx.restore();
+  ctx.save(); ctx.translate(x, y); ctx.scale(Math.max(0.35, Math.abs(Math.cos(S.anim * 2.2))), 1);
+  ctx.fillStyle = '#ff8ad8'; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = Math.max(1, r * 0.14); ctx.strokeStyle = '#ffe14a'; ctx.stroke();
+  ctx.fillStyle = '#3a0a2c';
+  ctx.beginPath(); ctx.arc(-r * 0.32, -r * 0.2, r * 0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(r * 0.32, -r * 0.2, r * 0.22, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = Math.max(1, r * 0.1); ctx.strokeStyle = '#3a0a2c'; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(0, r * 0.05, r * 0.45, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  ctx.restore();
+  if (p > 0.3){
+    ctx.font = `700 ${Math.round(Math.max(9, 13 * p))}px ${FONT_D}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillStyle = C.amber; ctx.fillText('MEME', x, y - r * 1.4);
+  }
+}
+
+function drawCoin(x, y, r, opts = {}){
+  const meme = !!opts.meme, ghostOn = opts.ghost && !meme, alpha = opts.alpha ?? 1;
+  const hue = (S.anim * 300) % 360;
+  ctx.save(); ctx.translate(x, y); ctx.globalAlpha = alpha;
+  let sx = 0.74 + 0.26 * Math.abs(Math.cos(S.anim * 5)), sy = 1;
+  if (S.dashT > 0 && !opts.ghostTrail){ sx *= 1.25; sy = 0.86; }
+  ctx.scale(sx, sy);
+  ctx.shadowColor = meme ? `hsl(${hue},100%,60%)` : ghostOn ? C.violet : C.amber; ctx.shadowBlur = r * 0.9;
+  const g = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r);
+  if (meme){ g.addColorStop(0, '#fff7d6'); g.addColorStop(0.5, `hsl(${hue},95%,62%)`); g.addColorStop(1, `hsl(${(hue + 60) % 360},90%,38%)`); }
+  else if (ghostOn){ g.addColorStop(0, '#f2e8ff'); g.addColorStop(0.5, '#9a7bff'); g.addColorStop(1, '#3a1d8a'); }
+  else { g.addColorStop(0, '#fff2c4'); g.addColorStop(0.45, '#ffb23e'); g.addColorStop(1, '#a95300'); }
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = r * 0.12; ctx.strokeStyle = meme ? `hsl(${(hue + 180) % 360},100%,75%)` : ghostOn ? '#d6f9ff' : '#ffe08a'; ctx.stroke();
+  ctx.lineWidth = r * 0.05; ctx.strokeStyle = ghostOn ? 'rgba(62,240,255,.6)' : 'rgba(110,45,0,.55)';
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.74, 0, Math.PI * 2); ctx.stroke();
+  // emblem: a hexagonal block with an escape arrow
+  ctx.strokeStyle = meme ? '#3a0a2c' : ghostOn ? '#eafcff' : '#6b2f00'; ctx.lineWidth = r * 0.1; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++){ const a = i * Math.PI / 3 - Math.PI / 2; ctx.lineTo(Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4); }
+  ctx.closePath(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-r * 0.14, r * 0.18); ctx.lineTo(r * 0.12, 0); ctx.lineTo(-r * 0.14, -r * 0.18); ctx.stroke();
+  // party hat
+  if (meme){
+    ctx.save(); ctx.translate(0, -r * 0.9); ctx.rotate(-0.25);
+    ctx.beginPath(); ctx.moveTo(-r * 0.42, 0); ctx.lineTo(r * 0.42, 0); ctx.lineTo(0, -r * 1.05); ctx.closePath();
+    ctx.fillStyle = '#ff3d6e'; ctx.fill();
+    const hw = yy => r * 0.42 * (1 + yy / (r * 1.05));
+    ctx.fillStyle = '#fff4d6';
+    for (const [a, b] of [[-0.2, -0.38], [-0.58, -0.76]]){
+      const y1 = a * r, y2 = b * r;
+      ctx.beginPath(); ctx.moveTo(-hw(y1), y1); ctx.lineTo(hw(y1), y1); ctx.lineTo(hw(y2), y2); ctx.lineTo(-hw(y2), y2); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = '#ffe14a'; ctx.beginPath(); ctx.arc(0, -r * 1.05, r * 0.13, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawPlayer(){
+  const r = L * 0.26;
+  const [gx, gy] = proj(player.x, 0, 0);
+  // shadow
+  const sh = player.h < 0 ? 0 : 1 / (1 + player.h * 0.8);
+  ctx.fillStyle = `rgba(0,0,0,${0.45 * sh})`;
+  ctx.beginPath(); ctx.ellipse(gx, gy, r * 0.9 * sh, r * 0.22 * sh, 0, 0, Math.PI * 2); ctx.fill();
+
+  const ghostOn = S.ghost > 0, memeOn = S.meme > 0;
+  const blinkOff = ghostOn && S.ghost < 1 && Math.floor(S.anim * 12) % 2 === 0;
+
+  // afterimages (ghost, meme or dash)
+  if (ghostOn || memeOn || S.dashT > 0){
+    for (let i = S.trail.length - 1; i >= 1; i -= 2){
+      const t = S.trail[i];
+      const [tx, ty] = proj(t.x, t.h, 0);
+      drawCoin(tx, ty - r + i * r * 0.12, r * (1 - i * 0.04), { ghost:true, meme:memeOn, alpha:(memeOn ? 0.25 : 0.12) * (1 - i / 9), ghostTrail:true });
+    }
+  }
+  if (S.dashT > 0){
+    ctx.strokeStyle = 'rgba(62,240,255,.6)'; ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++){
+      const lx = gx + (i - 2.5) * r * 0.35, ly = gy - player.h * U - r * (0.4 + (i % 3) * 0.5);
+      ctx.beginPath(); ctx.moveTo(lx, ly + r * 0.6); ctx.lineTo(lx, ly + r * 1.6); ctx.stroke();
+    }
+  }
+  const [px, py] = proj(player.x, player.h, 0);
+  const graceBlink = S.grace > 0 && Math.floor(S.anim * 14) % 2 === 0;
+  drawCoin(px, py - r, r, { ghost:ghostOn && !blinkOff, meme:memeOn, alpha:ghostOn ? 0.62 : (graceBlink ? 0.45 : 1) });
+}
+
+function drawParticles(){
+  for (const p of S.parts){
+    const a = Math.max(0, p.life / p.max);
+    if (p.ring){
+      const rr = L * 0.3 + (1 - a) * L * 2.2;
+      ctx.strokeStyle = p.color; ctx.globalAlpha = a; ctx.lineWidth = 4 * a + 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+    } else {
+      ctx.globalAlpha = a; ctx.fillStyle = p.color;
+      const s = 2 + 3 * a; ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s); ctx.globalAlpha = 1;
+    }
+  }
+  for (const t of S.texts){
+    const a = Math.min(1, t.life / t.max * 2);
+    ctx.globalAlpha = a; ctx.fillStyle = t.color;
+    ctx.font = `700 ${Math.round((W < 500 ? 13 : 16) * t.scale)}px ${FONT_D}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(t.text, t.x, t.y); ctx.globalAlpha = 1;
+  }
+}
+
+function drawHUD(){
+  const narrow = W < 500;
+  ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+  ctx.fillStyle = C.ink; ctx.font = `700 ${narrow ? 24 : 32}px ${FONT_D}`;
+  let scoreTxt = S.score.toLocaleString();
+  if (S.hackV > 0.4 && Math.random() < 0.14) scoreTxt = scoreTxt.replace(/\d/g, c => Math.random() < 0.5 ? String(R(10)) : '#');
+  ctx.fillText(scoreTxt, 16, 12);
+  ctx.fillStyle = C.dim; ctx.font = `400 ${narrow ? 10 : 12}px ${FONT_M}`;
+  ctx.fillText(`${Math.floor(S.dist).toLocaleString()} m`, 16, narrow ? 42 : 50);
+  ctx.fillStyle = C.cyan;
+  ctx.fillText(`◆ ${S.frags}`, 16, narrow ? 56 : 66);
+  if (S.vault > 0 || S.cold.phase !== 'off'){
+    const vy = narrow ? 71 : 83, ps = narrow ? 11 : 13;
+    S.vaultPulse = Math.max(0, (S.vaultPulse || 0) - 1 / 60);
+    const col = S.vaultPulse > 0 ? '#ffffff' : '#bfefff';
+    drawPadlock(16, vy - 1, ps, col);
+    ctx.fillStyle = col; ctx.font = `600 ${(narrow ? 10 : 12) + (S.vaultPulse > 0 ? 2 : 0)}px ${FONT_M}`;
+    ctx.fillText(`${S.vault.toLocaleString()} banked`, 16 + ps + 6, vy);
+  }
+
+  // best (under the pause button)
+  ctx.textAlign = 'right'; ctx.fillStyle = C.dim;
+  ctx.fillText(`BEST ${Math.max(S.best, S.score).toLocaleString()}`, W - 16, 62);
+
+  // escape meter (or the Meme countdown)
+  const mw = Math.min(240, W * 0.38), mx = cx - mw / 2, my = 26, mh = 8;
+  const memeOn = S.meme > 0;
+  const ready = S.meter >= METER_MAX && S.ghost <= 0 && !memeOn;
+  let label = 'ESCAPE METER', fillFrac = S.meter / METER_MAX, col = C.violet;
+  if (memeOn){ label = 'MEME MODE'; fillFrac = S.meme / MEME_DUR; }
+  else if (S.ghost > 0){ label = 'GHOST MODE'; fillFrac = S.ghost / GHOST_DUR; col = '#d6c2ff'; }
+  else if (ready){ label = narrow ? 'GHOST READY' : 'GHOST READY · PRESS E'; }
+  ctx.textAlign = 'center'; ctx.font = `600 ${narrow ? 9 : 10}px ${FONT_M}`;
+  ctx.fillStyle = memeOn ? `hsl(${(S.anim * 300) % 360},100%,70%)` : ready ? (Math.floor(S.anim * 4) % 2 ? '#fff' : C.violet) : C.dim;
+  ctx.fillText(label, cx, 10);
+  const cells = METER_MAX, gap = 2, cw = (mw - gap * (cells - 1)) / cells;
+  for (let i = 0; i < cells; i++){
+    const on = i < Math.round(fillFrac * cells);
+    ctx.fillStyle = on ? (memeOn ? `hsl(${(i * 24 + S.anim * 240) % 360},95%,60%)` : col) : 'rgba(163,91,255,.16)';
+    ctx.fillRect(mx + i * (cw + gap), my, cw, mh);
+  }
+  if (ready){ ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.strokeRect(mx - 2.5, my - 2.5, mw + 5, mh + 5); }
+
+  // system log line
+  if (S.logT < 0 && S.logT > -4){
+    const a = Math.min(1, -S.logT * 3, (4 + S.logT) * 3);
+    ctx.globalAlpha = a; ctx.fillStyle = C.amber; ctx.font = `600 ${narrow ? 9 : 11}px ${FONT_M}`;
+    ctx.fillText('> ' + LOGS[S.logI], cx, narrow ? 86 : 46); ctx.globalAlpha = 1;
+  }
+  // Rug Pull banner
+  const rg = S.rug;
+  if (rg.phase !== 'off' && S.mode !== 'dying'){
+    const by = horizonY - (narrow ? 62 : 72), big = narrow ? 34 : 46;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const blink = Math.floor(S.anim * 5) % 2;
+    if (rg.phase === 'scan'){
+      const o = S.objs.find(q => q.type === 'scan');
+      if (o && o.hold > 0){
+        const w = Math.min(220, W * 0.5);
+        ctx.fillStyle = '#3dff9a'; ctx.font = `700 ${narrow ? 18 : 22}px ${FONT_D}`; ctx.fillText('SCANNING…', cx, by);
+        ctx.fillStyle = 'rgba(61,255,154,.2)'; ctx.fillRect(cx - w / 2, by + 18, w, 6);
+        ctx.fillStyle = '#3dff9a'; ctx.fillRect(cx - w / 2, by + 18, w * Math.min(1, o.hold / RUG_SCAN), 6);
+      }
+    } else if (rg.phase === 'warn'){
+      const left = Math.max(1, Math.ceil(RUG_WARN - rg.t));
+      ctx.fillStyle = blink ? '#3dff9a' : '#b9ffd9'; ctx.font = `700 ${narrow ? 16 : 20}px ${FONT_D}`;
+      ctx.fillText('RUG PULL DETECTED', cx, by - big * 0.95);
+      ctx.fillStyle = '#ffffff'; ctx.font = `900 ${Math.round(big * 1.7)}px ${FONT_D}`; ctx.fillText(String(left), cx, by + big * 0.25);
+      ctx.fillStyle = C.dim; ctx.font = `500 ${narrow ? 11 : 13}px ${FONT_M}`; ctx.fillText('All obstacles are being cleared', cx, by + big * 1.45);
+    } else if (rg.phase === 'pull'){
+      if (rg.t < 2.2){
+        ctx.fillStyle = blink ? C.danger : '#ffd0da'; ctx.font = `900 ${narrow ? 26 : 34}px ${FONT_D}`;
+        ctx.fillText('THE FLOOR IS GOING', cx, by);
+        ctx.fillStyle = C.ink; ctx.font = `500 ${narrow ? 11 : 13}px ${FONT_M}`; ctx.fillText('Cracked lanes drop. Keep moving.', cx, by + big * 0.75);
+      } else {
+        const w = Math.min(200, W * 0.45);
+        ctx.fillStyle = C.danger; ctx.font = `700 ${narrow ? 12 : 14}px ${FONT_D}`; ctx.fillText('RUG PULL', cx, by);
+        ctx.fillStyle = 'rgba(255,61,110,.2)'; ctx.fillRect(cx - w / 2, by + 14, w, 5);
+        ctx.fillStyle = C.danger; ctx.fillRect(cx - w / 2, by + 14, w * Math.min(1, rg.rows / RUG_ROWS), 5);
+      }
+    }
+  }
+
+  // Halving and bull run banners
+  const hv = S.halv;
+  if (hv.phase !== 'off' && S.mode !== 'dying'){
+    const by = horizonY - (narrow ? 62 : 72), big = narrow ? 34 : 46;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const blink = Math.floor(S.anim * 5) % 2;
+    if (hv.phase === 'warn'){
+      const left = Math.max(1, Math.ceil(HALV_WARN - hv.t));
+      ctx.fillStyle = blink ? C.amber : '#ffe2b0'; ctx.font = `700 ${narrow ? 16 : 20}px ${FONT_D}`;
+      ctx.fillText('HALVING AHEAD', cx, by - big * 0.95);
+      ctx.fillStyle = '#ffffff'; ctx.font = `900 ${Math.round(big * 1.7)}px ${FONT_D}`; ctx.fillText(String(left), cx, by + big * 0.25);
+      ctx.fillStyle = C.dim; ctx.font = `500 ${narrow ? 11 : 13}px ${FONT_M}`; ctx.fillText('Follow the longest chain.', cx, by + big * 1.4); ctx.fillText('The wrong one halves your score.', cx, by + big * 1.4 + (narrow ? 15 : 18));
+    } else if (hv.phase === 'fork'){
+      const z = hv.zone;
+      ctx.font = `800 ${narrow ? 22 : 28}px ${FONT_D}`;
+      if (z && !z.committed){
+        ctx.fillStyle = blink ? C.amber : '#ffe2b0'; ctx.fillText('PICK A CHAIN', cx, by);
+        ctx.fillStyle = C.ink; ctx.font = `500 ${narrow ? 11 : 13}px ${FONT_M}`; ctx.fillText('Bright road with a fragment trail is the longest chain', cx, by + big * 0.7);
+      } else {
+        ctx.fillStyle = C.amber; ctx.fillText('LOCKED IN', cx, by);
+        ctx.fillStyle = C.dim; ctx.font = `500 ${narrow ? 11 : 13}px ${FONT_M}`; ctx.fillText('Chains merge soon. Grab fragments, jump the arcs.', cx, by + big * 0.7);
+        const w = Math.min(220, W * 0.5), pr = Math.max(0, Math.min(1, hv.t / hv.total));
+        ctx.fillStyle = 'rgba(255,178,62,.2)'; ctx.fillRect(cx - w / 2, by - big * 0.75, w, 5);
+        ctx.fillStyle = C.amber; ctx.fillRect(cx - w / 2, by - big * 0.75, w * pr, 5);
+      }
+    } else if (hv.phase === 'bull'){
+      const w = Math.min(200, W * 0.45), rv = hv.rev > 0;
+      if (rv){
+        // the reveal: what the chain decided, with the number moving in front of you
+        const f = Math.min(1, (REV_TIME - hv.rev) / 0.25), fade = Math.min(1, hv.rev / 0.5);
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = hv.revOk ? C.cyan : C.danger; ctx.font = `800 ${narrow ? 20 : 26}px ${FONT_D}`;
+        ctx.fillText(hv.revOk ? 'LONGEST CHAIN' : 'ORPHANED CHAIN', cx, by - big * 0.95);
+        ctx.fillStyle = '#ffffff'; ctx.font = `900 ${Math.round(big * (1.3 + 0.5 * (1 - f)))}px ${FONT_D}`;
+        const shown = hv.revOk ? '+300' : Math.max(0, Math.round(hv.revCur - (hv.revPen - hv.penLeft))).toLocaleString();
+        ctx.fillText(shown, cx, by + big * 0.25);
+        ctx.fillStyle = hv.revOk ? C.dim : C.danger; ctx.font = `600 ${narrow ? 12 : 14}px ${FONT_M}`;
+        ctx.fillText(hv.revOk ? 'The network agrees with you' : S.vault > 0 ? 'HALVED · ' + S.vault.toLocaleString() + ' IN THE VAULT IS SAFE' : 'SCORE HALVED', cx, by + big * 1.15);
+        ctx.globalAlpha = 1;
+      }
+      const by2 = rv ? by + big * 2.0 : by;
+      ctx.fillStyle = C.amber; ctx.font = `800 ${(narrow ? 18 : 22) + (S.mult >= 3 ? 4 : 0)}px ${FONT_D}`; ctx.fillText('BULL RUN  x' + S.mult, cx, by2);
+      ctx.fillStyle = 'rgba(255,178,62,.2)'; ctx.fillRect(cx - w / 2, by2 + 18, w, 5);
+      ctx.fillStyle = (S.bullT < 2 && Math.floor(S.anim * 8) % 2) ? '#ffffff' : C.amber; ctx.fillRect(cx - w / 2, by2 + 18, w * Math.max(0, Math.min(1, S.bullT / BULL_DUR)), 5);
+    }
+  }
+
+  // Hack banners
+  const hk = S.hack;
+  if (hk.phase !== 'off' && S.mode !== 'dying'){
+    const by = horizonY - (narrow ? 62 : 72), big = narrow ? 34 : 46;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const glitch = (txt, x, y) => {
+      const o = (Math.random() - 0.5) * 6;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(255,43,214,.7)'; ctx.fillText(txt, x - 3 + o, y);
+      ctx.fillStyle = 'rgba(62,240,255,.7)'; ctx.fillText(txt, x + 3 - o, y);
+      ctx.restore(); ctx.fillStyle = '#ffffff'; ctx.fillText(txt, x, y);
+    };
+    if (hk.phase === 'warn'){
+      const left = Math.max(1, Math.ceil(HACK_WARN - hk.t));
+      ctx.font = `800 ${narrow ? 20 : 26}px ${FONT_D}`; glitch('SYSTEM COMPROMISED', cx, by - big * 0.95);
+      ctx.font = `900 ${Math.round(big * 1.5)}px ${FONT_D}`; glitch(String(left), cx, by + big * 0.25);
+      ctx.fillStyle = C.ink; ctx.font = `500 ${narrow ? 11 : 13}px ${FONT_M}`;
+      ctx.fillText('Solid is real. Flickering is fake.', cx, by + big * 1.3);
+      ctx.fillStyle = C.dim; ctx.fillText('A real hit costs ' + HACK_HIT + ' points, not your run.', cx, by + big * 1.3 + (narrow ? 15 : 18));
+    } else {
+      const w = Math.min(200, W * 0.45);
+      ctx.font = `800 ${narrow ? 18 : 22}px ${FONT_D}`; glitch('HACKED', cx, by);
+      ctx.fillStyle = 'rgba(255,43,214,.2)'; ctx.fillRect(cx - w / 2, by + 18, w, 5);
+      ctx.fillStyle = '#ff2bd6'; ctx.fillRect(cx - w / 2, by + 18, w * Math.max(0, Math.min(1, 1 - hk.t / HACK_TIME)), 5);
+      if (hk.t < 4){ ctx.fillStyle = C.ink; ctx.font = `500 ${narrow ? 11 : 13}px ${FONT_M}`; ctx.fillText('Solid is real. Flickering is fake.', cx, by + 40); }
+    }
+  }
+
+  // Cold Storage banners
+  const cs = S.cold;
+  if (cs.phase !== 'off' && S.mode !== 'dying'){
+    const by = horizonY - (narrow ? 62 : 72), big = narrow ? 34 : 46;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (cs.phase === 'warn'){
+      const left = Math.max(1, Math.ceil(COLD_WARN - cs.t));
+      ctx.fillStyle = '#bfefff'; ctx.font = `800 ${narrow ? 20 : 26}px ${FONT_D}`;
+      ctx.fillText('COLD STORAGE', cx, by - big * 0.95);
+      ctx.fillStyle = '#ffffff'; ctx.font = `900 ${Math.round(big * 1.5)}px ${FONT_D}`; ctx.fillText(String(left), cx, by + big * 0.25);
+      ctx.fillStyle = C.ink; ctx.font = `500 ${narrow ? 11 : 13}px ${FONT_M}`;
+      ctx.fillText('Your score freezes. Gems bank it in the vault.', cx, by + big * 1.3);
+      ctx.fillStyle = C.dim; ctx.fillText('Banked points survive the Halving and the Hack.', cx, by + big * 1.3 + (narrow ? 15 : 18));
+    } else {
+      const w = Math.min(200, W * 0.45);
+      ctx.fillStyle = '#e6f9ff'; ctx.font = `800 ${narrow ? 18 : 22}px ${FONT_D}`; ctx.fillText('COLD STORAGE', cx, by);
+      ctx.fillStyle = 'rgba(191,239,255,.2)'; ctx.fillRect(cx - w / 2, by + 18, w, 5);
+      ctx.fillStyle = '#bfefff'; ctx.fillRect(cx - w / 2, by + 18, w * Math.max(0, Math.min(1, 1 - cs.t / COLD_TIME)), 5);
+      if (cs.t < 4){ ctx.fillStyle = C.ink; ctx.font = `500 ${narrow ? 11 : 13}px ${FONT_M}`; ctx.fillText('Icy road. Lane changes slide.', cx, by + 40); }
+    }
+  }
+
+  // first-seconds hint
+  if (S.mode === 'play' && S.t < 4){
+    ctx.globalAlpha = Math.min(1, (4 - S.t)); ctx.fillStyle = C.ink;
+    ctx.font = `500 ${narrow ? 11 : 13}px ${FONT_M}`;
+    ctx.fillText(narrow ? 'Tap sides to move · tap middle to jump' : 'Arrows to move · Space to jump · Shift to dash', cx, horizonY + (groundY - horizonY) * 0.18);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function render(){
+  updateCurve();
+  CIR = S.circus * ((S.meme > 0 && S.meme < 1.6) ? (Math.floor(S.anim * 9) % 2 ? 1 : 0.3) : 1);
+  ctx.save();
+  if (S.shake > 0){
+    const m = S.shake * S.shake * 14;
+    ctx.translate((Math.random() - .5) * m, (Math.random() - .5) * m);
+  }
+  if (S.hackV > 0.6 && Math.random() < 0.08) ctx.translate((Math.random() - 0.5) * 9 * S.hackV, 0);
+  // lean the camera a touch into the bend, about the player's feet
+  const roll = -curvAt(S.dist + 14) / CURVE_MAX * 0.03;
+  if (roll){ ctx.translate(cx, groundY); ctx.rotate(roll); ctx.translate(-cx, -groundY); }
+  drawSky();
+  drawEscort();
+  drawFloor();
+  drawBullRoad();
+  drawIceRoad();
+  drawHoles();
+  drawFork();
+  drawTunnel();
+  drawSpots();
+  for (const o of S.objs) if (o.type === 'val') drawTelegraph(o);
+
+  const sorted = S.objs.filter(o => o.z < SPAWN_Z + 2).sort((a, b) => b.z - a.z);
+  let playerDrawn = false;
+  const showPlayer = S.mode !== 'over' && !(S.mode === 'dying' && S.reason !== 'rug');
+  for (const o of sorted){
+    if (!playerDrawn && o.z < 0){ if (showPlayer || S.mode === 'title') drawPlayer(); playerDrawn = true; }
+    if (o.type === 'block') drawBlock(o);
+    else if (o.type === 'fire') drawFirewall(o);
+    else if (o.type === 'frag') drawFrag(o);
+    else if (o.type === 'gem') drawGem(o);
+    else if (o.type === 'val') drawValidator(o);
+    else if (o.type === 'meme') drawMeme(o);
+    else if (o.type === 'scan') drawScan(o);
+    else if (o.type === 'phantom') drawPhantom(o);
+  }
+  if (!playerDrawn && (showPlayer || S.mode === 'title')) drawPlayer();
+  drawParticles();
+  ctx.restore();
+  drawHackFx();
+
+  if (S.flash > 0){
+    ctx.globalAlpha = S.flash * 0.5; ctx.fillStyle = S.flashColor; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+  }
+  // vignette
+  const vg = ctx.createRadialGradient(cx, H * 0.55, Math.min(W, H) * 0.35, cx, H * 0.55, Math.max(W, H) * 0.8);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+
+  // Rug Pull mood: green while the warning runs, red while the floor is going
+  if (S.rugV > 0.02){
+    const warn = S.rug.phase === 'warn';
+    const a = 0.24 * S.rugV * (warn ? 1 : 0.75 + 0.25 * Math.sin(S.anim * 9));
+    const rg2 = ctx.createRadialGradient(cx, H * 0.55, Math.min(W, H) * 0.3, cx, H * 0.55, Math.max(W, H) * 0.75);
+    rg2.addColorStop(0, 'rgba(0,0,0,0)'); rg2.addColorStop(1, warn ? `rgba(61,255,154,${a})` : `rgba(255,61,110,${a})`);
+    ctx.fillStyle = rg2; ctx.fillRect(0, 0, W, H);
+  }
+
+  // Halving mood: amber while the fork approaches, gold through the bull run
+  if (S.halvV > 0.02 || S.bullV > 0.02){
+    const bull = S.bullV > S.halvV;
+    const a = bull ? 0.26 * S.bullV * (0.8 + 0.2 * Math.sin(S.anim * 5)) : 0.22 * S.halvV;
+    const hg = ctx.createRadialGradient(cx, H * 0.55, Math.min(W, H) * 0.3, cx, H * 0.55, Math.max(W, H) * 0.75);
+    hg.addColorStop(0, 'rgba(0,0,0,0)'); hg.addColorStop(1, bull ? (S.mult >= 3 ? `rgba(255,214,77,${a})` : `rgba(255,96,64,${a})`) : `rgba(255,178,62,${a})`);
+    ctx.fillStyle = hg; ctx.fillRect(0, 0, W, H);
+  }
+
+  // Cold Storage mood: frost creeping in from the edges
+  if (S.coldV > 0.02){
+    const cg = ctx.createRadialGradient(cx, H * 0.55, Math.min(W, H) * 0.28, cx, H * 0.55, Math.max(W, H) * 0.75);
+    cg.addColorStop(0, 'rgba(0,0,0,0)'); cg.addColorStop(1, `rgba(200,240,255,${0.3 * S.coldV})`);
+    ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+  }
+
+  if (S.mode === 'play' || S.mode === 'paused' || S.mode === 'dying') drawHUD();
+
+  // DOM button states
+  if (S.mode === 'play'){
+    btn.dash.style.setProperty('--cd', (1 - S.dashCd / DASH_CD).toFixed(3));
+    btn.dash.classList.toggle('cool', S.dashCd > 0);
+    btn.ghost.style.setProperty('--m', (S.ghost > 0 ? S.ghost / GHOST_DUR : S.meter / METER_MAX).toFixed(3));
+    btn.ghost.classList.toggle('ready', S.meter >= METER_MAX && S.ghost <= 0);
+  }
+}
+
+/* ---------- input ---------- */
+addEventListener('keydown', e => {
+  const k = e.key;
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(k) && S.mode !== 'title' && S.mode !== 'over') e.preventDefault();
+  if (k === 'Escape' || k === 'p' || k === 'P'){
+    if (S.mode === 'play') pause(); else if (S.mode === 'paused') resume();
+    return;
+  }
+  if (S.mode !== 'play' || e.repeat) return;
+  if (k === 'ArrowLeft' || k === 'a' || k === 'A') move(-1);
+  else if (k === 'ArrowRight' || k === 'd' || k === 'D') move(1);
+  else if (k === 'ArrowUp' || k === ' ' || k === 'w' || k === 'W') jump();
+  else if (k === 'Shift' || k === 'ArrowDown' || k === 's' || k === 'S') dash();
+  else if (k === 'e' || k === 'E' || k === 'g' || k === 'G') ghost();
+});
+
+let touch = null;
+cv.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (S.mode !== 'play') return;
+  const t = e.changedTouches[0];
+  touch = { id:t.identifier, x:t.clientX, y:t.clientY, done:false };
+}, { passive:false });
+cv.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (!touch || touch.done || S.mode !== 'play') return;
+  const t = [...e.changedTouches].find(t => t.identifier === touch.id); if (!t) return;
+  const dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+  if (Math.hypot(dx, dy) > 26){
+    touch.done = true;
+    if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1);
+    else if (dy < 0) jump(); else dash();
+  }
+}, { passive:false });
+cv.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (!touch || S.mode !== 'play'){ touch = null; return; }
+  if (!touch.done){
+    const r = cv.getBoundingClientRect(), fx = (touch.x - r.left) / r.width;
+    if (fx < 0.33) move(-1); else if (fx > 0.67) move(1); else jump();
+  }
+  touch = null;
+}, { passive:false });
+// mouse fallback for desktop clicks on the canvas
+cv.addEventListener('mousedown', e => {
+  if (S.mode !== 'play') return;
+  const r = cv.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width;
+  if (fx < 0.33) move(-1); else if (fx > 0.67) move(1); else jump();
+});
+
+function tapBtn(el, fn){
+  el.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); fn(); }, { passive:false });
+  el.addEventListener('click', e => { e.preventDefault(); fn(); });
+}
+tapBtn(btn.dash, () => S.mode === 'play' && dash());
+tapBtn(btn.ghost, () => S.mode === 'play' && ghost());
+tapBtn(btn.pause, pause);
+$('playBtn').addEventListener('click', start);
+$('resumeBtn').addEventListener('click', resume);
+$('restartBtn').addEventListener('click', start);
+$('againBtn').addEventListener('click', () => { if (performance.now() - S.overAt > 350) start(); });
+$('menuBtn').addEventListener('click', toTitle);
+
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+addEventListener('blur', pause);
+addEventListener('resize', resize);
+document.addEventListener('touchmove', e => { if (S.mode === 'play') e.preventDefault(); }, { passive:false });
+
+/* ---------- leaderboard ---------- */
+// The game never depends on this. If the network or the function is unavailable, runs still play and the
+// personal best stays on the device.
+const API = '/api/leaderboard';
+const LB = { name:'', pin:'', email:'', token:null, tokenP:null, pending:null, from:'title' };
+try { LB.name = localStorage.getItem('bb_name') || ''; LB.pin = localStorage.getItem('bb_pin') || ''; LB.email = localStorage.getItem('bb_email') || ''; } catch (e) {}
+function saveId(){ try { localStorage.setItem('bb_name', LB.name); localStorage.setItem('bb_pin', LB.pin); localStorage.setItem('bb_email', LB.email || ''); } catch (e) {} }
+
+async function api(body){
+  const r = await fetch(API, { method:'POST', headers:{ 'content-type':'application/json' }, body:JSON.stringify(body) });
+  let data = null; try { data = await r.json(); } catch (e) {}
+  return { ok:r.ok, status:r.status, data };
+}
+
+function beginRun(){
+  const id = ++S.runId;
+  LB.token = null; LB.pending = null;
+  LB.tokenP = api({ action:'start' })
+    .then(r => { if (r.ok && r.data && r.data.token && S.runId === id) LB.token = r.data.token; })
+    .catch(() => {});
+}
+
+const setStatus = t => { $('lbStatus').textContent = t; };
+
+function prepareSubmit(){
+  LB.pending = { score:S.score, dist:Math.floor(S.dist), frags:S.frags, time:Math.round(S.t * 10) / 10, forks:S.forks, halvings:S.halvings, hacks:S.hacks, hits:S.hackHits, colds:S.colds };
+  $('addBtn').hidden = true;
+  if (S.testRun){ setStatus('Test run from an event link. These are not posted to the leaderboard.'); LB.pending = null; return; }
+  if (LB.pending.time < 5){ setStatus('Survive at least 5 seconds to post a score to the leaderboard.'); LB.pending = null; return; }
+  if (!LB.name){ setStatus('Pick a name to put this score on the leaderboard.'); $('addBtn').hidden = false; return; }
+  submitPending();
+}
+
+async function submitPending(){
+  const run = LB.pending; if (!run) return;
+  const id = S.runId;
+  setStatus('Sending score to the ledger…');
+  try { await LB.tokenP; } catch (e) {}
+  if (!LB.token){ setStatus('Leaderboard unreachable. Your best is still saved on this device.'); return; }
+  try {
+    const r = await api({ action:'submit', name:LB.name, pin:LB.pin, token:LB.token, score:run.score, dist:run.dist, frags:run.frags, time:run.time, forks:run.forks, halvings:run.halvings, hacks:run.hacks, hits:run.hits, colds:run.colds });
+    if (S.runId !== id) return;
+    if (r.ok && r.data){
+      setStatus(r.data.improved
+        ? `New best for ${LB.name}. You are #${r.data.rank} on the leaderboard.`
+        : `Your leaderboard best is still ${r.data.best.toLocaleString()} (rank #${r.data.rank}).`);
+      LB.pending = null;
+    } else {
+      setStatus((r.data && r.data.message) || 'The ledger rejected that score.');
+    }
+  } catch (e) {
+    if (S.runId === id) setStatus('Leaderboard unreachable. Your best is still saved on this device.');
+  }
+}
+
+function updateWho(){ $('nameBtn').textContent = LB.name ? 'Name: ' + LB.name : 'Set name'; $('addBtn').textContent = LB.name ? 'Change name' : 'Set name'; }
+const back = () => { showOverlay(LB.from === 'over' ? 'over' : 'title'); };
+
+function openName(){
+  $('nameIn').value = LB.name; $('pinIn').value = LB.pin; $('emailIn').value = ''; $('nameErr').textContent = '';
+  $('emailIn').placeholder = LB.email ? 'Saved: ' + LB.email + ' (type to change)' : 'Only used if you forget your PIN';
+  showOverlay('name'); $('nameIn').focus();
+}
+
+async function saveName(){
+  const name = $('nameIn').value.trim().replace(/\s+/g, ' ');
+  const pin = $('pinIn').value.trim();
+  const err = $('nameErr');
+  if (!/^[A-Za-z0-9 _-]{2,16}$/.test(name)){ err.textContent = 'Use 2 to 16 letters, numbers, spaces, - or _.'; return; }
+  if (!/^\d{4,8}$/.test(pin)){ err.textContent = 'PIN must be 4 to 8 digits.'; return; }
+  const email = $('emailIn').value.trim();
+  if (email && !/^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/.test(email)){ err.textContent = 'That email address does not look right.'; return; }
+  err.textContent = 'Checking…'; $('nameSave').disabled = true;
+  try {
+    const r = await api({ action:'claim', name, pin, email });
+    if (r.ok && r.data){
+      LB.name = r.data.name || name; LB.pin = pin; LB.email = r.data.email || ''; saveId(); updateWho();
+      err.textContent = '';
+      back();
+      if (LB.pending) submitPending();
+    } else {
+      err.textContent = (r.data && r.data.message) || 'Could not save that name.';
+    }
+  } catch (e) {
+    err.textContent = 'Cannot reach the leaderboard right now. Try again when you are online.';
+  }
+  $('nameSave').disabled = false;
+}
+
+function renderBoard(entries){
+  const list = $('boardList'); list.replaceChildren();
+  const me = LB.name.toLowerCase();
+  entries.forEach((e, i) => {
+    const li = document.createElement('li');
+    if (me && String(e.name).toLowerCase() === me) li.className = 'me';
+    const rk = document.createElement('span'); rk.className = 'rk'; rk.textContent = '#' + (i + 1);
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = e.name;
+    const sc = document.createElement('span'); sc.className = 'sc'; sc.textContent = Number(e.score).toLocaleString();
+    li.append(rk, nm, sc); list.append(li);
+  });
+  $('boardMsg').textContent = entries.length ? '' : 'No scores yet. Be the first.';
+}
+
+async function openBoard(){
+  showOverlay('board');
+  $('boardList').replaceChildren(); $('boardMsg').textContent = 'Loading…';
+  try {
+    const r = await fetch(API + '?limit=25', { cache:'no-store' });
+    if (!r.ok) throw new Error('bad status');
+    renderBoard((await r.json()).entries || []);
+  } catch (e) {
+    $('boardMsg').textContent = 'Leaderboard unreachable. It needs a connection.';
+  }
+}
+
+$('lbBtn').addEventListener('click', () => { LB.from = 'title'; openBoard(); });
+$('lbBtn2').addEventListener('click', () => { LB.from = 'over'; openBoard(); });
+$('nameBtn').addEventListener('click', () => { LB.from = 'title'; openName(); });
+$('addBtn').addEventListener('click', () => { LB.from = 'over'; openName(); });
+$('boardClose').addEventListener('click', back);
+$('nameCancel').addEventListener('click', back);
+$('nameSave').addEventListener('click', saveName);
+
+/* forgot PIN: email a code, then set a new PIN with it */
+function openReset(){
+  $('rName').value = $('nameIn').value.trim() || LB.name; $('rCode').value = ''; $('rPin').value = ''; $('resetErr').textContent = '';
+  $('rStep2').hidden = true; $('rDo').hidden = true; $('rResend').hidden = true; $('rSend').hidden = false; $('rName').disabled = false;
+  $('resetIntro').textContent = 'Enter your name and we will email a six digit code to the address saved against it.';
+  showOverlay('reset'); $('rName').focus();
+}
+async function sendCode(){
+  const name = $('rName').value.trim().replace(/\s+/g, ' '), err = $('resetErr');
+  if (!/^[A-Za-z0-9 _-]{2,16}$/.test(name)){ err.textContent = 'Enter the name you play under.'; return; }
+  err.textContent = 'Sending…'; $('rSend').disabled = $('rResend').disabled = true;
+  try {
+    const r = await api({ action:'forgot', name });
+    if (r.ok){
+      err.textContent = '';
+      $('resetIntro').textContent = (r.data && r.data.message) || 'If that name has an email saved, a code is on its way.';
+      $('rStep2').hidden = false; $('rDo').hidden = false; $('rResend').hidden = false; $('rSend').hidden = true; $('rName').disabled = true;
+      $('rCode').focus();
+    } else err.textContent = (r.data && r.data.message) || 'Could not send a code right now.';
+  } catch (e) { err.textContent = 'Cannot reach the leaderboard right now. Try again when you are online.'; }
+  $('rSend').disabled = $('rResend').disabled = false;
+}
+async function doReset(){
+  const name = $('rName').value.trim().replace(/\s+/g, ' '), code = $('rCode').value.trim(), pin = $('rPin').value.trim(), err = $('resetErr');
+  if (!/^\d{6}$/.test(code)){ err.textContent = 'The code is the six digits in the email.'; return; }
+  if (!/^\d{4,8}$/.test(pin)){ err.textContent = 'New PIN must be 4 to 8 digits.'; return; }
+  err.textContent = 'Checking…'; $('rDo').disabled = true;
+  try {
+    const r = await api({ action:'reset', name, code, pin });
+    if (r.ok && r.data){
+      LB.name = r.data.name || name; LB.pin = pin; LB.email = r.data.email || LB.email; saveId(); updateWho();
+      err.textContent = '';
+      back();
+      if (LB.from === 'over') setStatus('PIN reset. You are signed in as ' + LB.name + '.');
+      if (LB.pending) submitPending();
+    } else err.textContent = (r.data && r.data.message) || 'Could not reset the PIN.';
+  } catch (e) { err.textContent = 'Cannot reach the leaderboard right now. Try again when you are online.'; }
+  $('rDo').disabled = false;
+}
+$('forgotBtn').addEventListener('click', openReset);
+$('rSend').addEventListener('click', sendCode);
+$('rResend').addEventListener('click', sendCode);
+$('rDo').addEventListener('click', doReset);
+$('rCancel').addEventListener('click', () => showOverlay('name'));
+for (const id of ['nameIn', 'pinIn']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') saveName(); });
+
+/* ---------- loop ---------- */
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+  last = now;
+  try { update(dt); render(); } catch (err) { console.error(err); }
+  requestAnimationFrame(frame);
+}
+resize();
+updateWho();
+showOverlay('title');
+if (/debug/.test(location.hash)) window.__bb = { S, player, move, jump, ghost, scoreNow, spawnPattern, diff };
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
+  addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

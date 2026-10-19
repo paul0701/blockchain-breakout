@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "Blockchain Breakout",
+  "short_name": "Breakout",
+  "description": "You are the coin the system was never supposed to let escape. Dodge, dash and ghost your way out of the blockchain.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#06050d",
+  "theme_color": "#06050d",
+  "categories": ["games"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
