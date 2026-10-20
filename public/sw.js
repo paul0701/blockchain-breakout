@@ -1,7 +1,7 @@
 // Blockchain Breakout service worker.
 // The page is fetched network-first so updates arrive, with the cached copy as the offline fallback.
 // The leaderboard API is never cached.
-const CACHE = 'bb-v1';
+const CACHE = 'bb-v2';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

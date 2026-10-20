@@ -318,6 +318,8 @@ function shiftAt(z){
 /* ---------- storage ---------- */
 function loadBest(){ try { return parseInt(localStorage.getItem('bb_best') || '0', 10) || 0; } catch(e){ return 0; } }
 function saveBest(v){ try { localStorage.setItem('bb_best', String(v)); } catch(e){} }
+// The online best is the truth. Signing in on a new device or address pulls it down so the two never disagree.
+function syncBest(b){ b = Math.floor(Number(b) || 0); if (b > S.best){ S.best = b; saveBest(b); const el = $('sBest'); if (el) el.textContent = b.toLocaleString(); } }
 
 /* ---------- state ---------- */
 const S = {
@@ -2114,6 +2116,8 @@ async function submitPending(){
       setStatus(r.data.improved
         ? `New best for ${LB.name}. You are #${r.data.rank} on the leaderboard.`
         : `Your leaderboard best is still ${r.data.best.toLocaleString()} (rank #${r.data.rank}).`);
+      syncBest(r.data.best);
+      if (!r.data.improved && Number(r.data.best) > run.score) $('newBest').hidden = true;
       LB.pending = null;
     } else {
       setStatus((r.data && r.data.message) || 'The ledger rejected that score.');
@@ -2144,7 +2148,7 @@ async function saveName(){
   try {
     const r = await api({ action:'claim', name, pin, email });
     if (r.ok && r.data){
-      LB.name = r.data.name || name; LB.pin = pin; LB.email = r.data.email || ''; saveId(); updateWho();
+      LB.name = r.data.name || name; LB.pin = pin; LB.email = r.data.email || ''; saveId(); updateWho(); syncBest(r.data.best);
       err.textContent = '';
       back();
       if (LB.pending) submitPending();
@@ -2221,7 +2225,7 @@ async function doReset(){
   try {
     const r = await api({ action:'reset', name, code, pin });
     if (r.ok && r.data){
-      LB.name = r.data.name || name; LB.pin = pin; LB.email = r.data.email || LB.email; saveId(); updateWho();
+      LB.name = r.data.name || name; LB.pin = pin; LB.email = r.data.email || LB.email; saveId(); updateWho(); syncBest(r.data.best);
       err.textContent = '';
       back();
       if (LB.from === 'over') setStatus('PIN reset. You are signed in as ' + LB.name + '.');

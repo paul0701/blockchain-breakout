@@ -2,6 +2,7 @@
   "name": "blockchain-breakout",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Blockchain Breakout: an endless runner PWA with a Netlify Blobs leaderboard.",
   "scripts": {
     "test": "node test/leaderboard.test.mjs"
