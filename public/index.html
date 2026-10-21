@@ -111,6 +111,7 @@ h2{font-weight:900;font-size:clamp(2.2rem,10vw,3.2rem);text-transform:uppercase;
   <button id="pauseBtn" aria-label="Pause" hidden><i></i><i></i></button>
   <button id="dashBtn" class="round" aria-label="Dash" hidden>Dash<kbd>Shift</kbd></button>
   <button id="ghostBtn" class="round" aria-label="Ghost mode" hidden>Ghost<kbd>E</kbd></button>
+  <button id="soundBtn" type="button" aria-label="Sound on" aria-pressed="true" title="Sound (M)" style="position:fixed;top:12px;left:max(16px,env(safe-area-inset-left,0px));z-index:60;width:42px;height:42px;border-radius:50%;border:1px solid rgba(62,240,255,.35);background:rgba(10,12,24,.55);color:#ece8ff;font-size:19px;line-height:1;cursor:pointer;display:grid;place-items:center;-webkit-tap-highlight-color:transparent">&#128266;</button>
 
   <div id="ovTitle" class="overlay">
     <div class="panel">
@@ -223,6 +224,210 @@ h2{font-weight:900;font-size:clamp(2.2rem,10vw,3.2rem);text-transform:uppercase;
     </div>
   </div>
 </div>
+
+<script>
+/* Blockchain Breakout — techy/futuristic sound engine. Self-contained, no audio files:
+   every effect and the ambient bed are synthesised with the Web Audio API. */
+window.SFX = (function () {
+  'use strict';
+  var AC = window.AudioContext || window.webkitAudioContext;
+  var ctx = null, master = null, musicGain = null, muted = false;
+  try { muted = localStorage.getItem('bb_sound') === 'off'; } catch (e) {}
+
+  function ensure() {
+    if (!AC) return null;
+    if (!ctx) {
+      try { ctx = new AC(); } catch (e) { AC = null; return null; }
+      master = ctx.createGain(); master.gain.value = 0.9; master.connect(ctx.destination);
+      musicGain = ctx.createGain(); musicGain.gain.value = 0.0001; musicGain.connect(master);
+    }
+    return ctx;
+  }
+  function live() { return !muted && ensure(); }
+  function at() { var c = ensure(); return c ? c.currentTime : 0; }
+  function unlock() { var c = ensure(); if (c && c.state === 'suspended') c.resume(); }
+  ['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) {
+    addEventListener(ev, unlock, { passive: true });
+  });
+
+  function blip(type, f0, f1, dur, peak, when) {
+    var c = live(); if (!c) return;
+    var t = when || c.currentTime;
+    var o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t);
+    if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(master); o.start(t); o.stop(t + dur + 0.03);
+  }
+  function noiseBurst(dur, peak, type, freq, when) {
+    var c = live(); if (!c) return;
+    var t = when || c.currentTime;
+    var n = Math.max(1, Math.floor(c.sampleRate * dur));
+    var buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    var src = c.createBufferSource(); src.buffer = buf;
+    var f = c.createBiquadFilter(); f.type = type || 'bandpass'; f.frequency.value = freq || 1200; f.Q.value = 0.7;
+    var g = c.createGain();
+    g.gain.setValueAtTime(peak, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(master); src.start(t); src.stop(t + dur + 0.03);
+  }
+
+  /* ---- EDM bed: four-on-the-floor that speeds up and layers in as the run intensifies ---- */
+  var musicOn = false, mTimer = null, nextT = 0, step = 0;
+  var inten = 0.15, intenTarget = 0.15;   // 0..1 energy, driven by SFX.setPace()
+  var BPM_MIN = 124, BPM_MAX = 158;
+  function bpm() { return BPM_MIN + (BPM_MAX - BPM_MIN) * inten; }
+  function stepDur() { return (60 / bpm()) / 4; }   // one sixteenth note
+
+  // A natural-minor vibe: bass roots per bar, bass riff within a bar, pentatonic lead.
+  var BAR_ROOT = [55, 55, 43.65, 49];                                   // A1 A1 F1 G1
+  var BASS_HITS = [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0];     // sixteenth grid
+  var LEAD = [440, 0, 659.25, 0, 523.25, 659.25, 0, 880, 587.33, 0, 659.25, 0, 440, 523.25, 0, 880];
+
+  function kick(t) {
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.11);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.95, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    o.connect(g).connect(musicGain); o.start(t); o.stop(t + 0.22);
+  }
+  function hat(t, open) {
+    var dur = open ? 0.11 : 0.035;
+    var n = Math.max(1, Math.floor(ctx.sampleRate * dur)), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    var s = ctx.createBufferSource(); s.buffer = buf;
+    var hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 8000;
+    var g = ctx.createGain();
+    g.gain.setValueAtTime(open ? 0.22 : 0.16, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(hp).connect(g).connect(musicGain); s.start(t); s.stop(t + dur + 0.02);
+  }
+  function clap(t) {
+    var dur = 0.13, n = Math.max(1, Math.floor(ctx.sampleRate * dur)), buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    var s = ctx.createBufferSource(); s.buffer = buf;
+    var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1700; bp.Q.value = 0.9;
+    var g = ctx.createGain();
+    g.gain.setValueAtTime(0.32, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(bp).connect(g).connect(musicGain); s.start(t); s.stop(t + dur + 0.02);
+  }
+  function ebass(f, t, dur) {
+    var o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+    o.type = 'sawtooth'; o.frequency.value = f;
+    lp.type = 'lowpass'; lp.Q.value = 7;
+    lp.frequency.setValueAtTime(260 + 900 * inten, t);
+    lp.frequency.exponentialRampToValueAtTime(180, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.26, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(lp).connect(g).connect(musicGain); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function lead(f, t, dur) {
+    var g = ctx.createGain(), lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 3200; lp.Q.value = 1;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.1, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    lp.connect(g).connect(musicGain);
+    [1, 1.006].forEach(function (m) {
+      var o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f * m;
+      o.connect(lp); o.start(t); o.stop(t + dur + 0.02);
+    });
+  }
+
+  function schedule(t) {
+    var bar = (step >> 4) % 4, s = step & 15, sd = stepDur();
+    inten += (intenTarget - inten) * 0.06;   // glide toward the target energy
+    if (s % 4 === 0) kick(t);                                  // four on the floor
+    if (inten > 0.3 && (s === 4 || s === 12)) clap(t);         // backbeat
+    if (inten > 0.2 && s % 2 === 1) hat(t, false);             // offbeat hats
+    if (inten > 0.6 && s % 2 === 0) hat(t, s === 8);           // fill to straight eighths, open on the "and"
+    if (BASS_HITS[s]) ebass(BAR_ROOT[bar] * (s === 8 ? 2 : 1), t, sd * (BASS_HITS[s] ? 1.4 : 1));
+    if (inten > 0.5) {
+      var note = LEAD[s];
+      if (note && (inten > 0.75 || s % 2 === 0)) lead(note, t, sd * 1.6);
+    }
+  }
+  function tick() {
+    var c = ensure(); if (!c || muted || !musicOn) return;
+    while (nextT < c.currentTime + 0.22) { schedule(nextT); nextT += stepDur(); step++; }
+    mTimer = setTimeout(tick, 25);
+  }
+  function startMusic() {
+    var c = live(); if (!c || musicOn) return;
+    musicOn = true; step = 0; inten = Math.min(inten, 0.2); nextT = c.currentTime + 0.08;
+    musicGain.gain.cancelScheduledValues(c.currentTime);
+    musicGain.gain.setValueAtTime(Math.max(0.0001, musicGain.gain.value), c.currentTime);
+    musicGain.gain.linearRampToValueAtTime(0.8, c.currentTime + 0.5);
+    tick();
+  }
+  function stopMusic() {
+    musicOn = false;
+    if (mTimer) { clearTimeout(mTimer); mTimer = null; }
+    if (ctx && musicGain) {
+      var t = ctx.currentTime;
+      musicGain.gain.cancelScheduledValues(t);
+      musicGain.gain.setValueAtTime(Math.max(0.0001, musicGain.gain.value), t);
+      musicGain.gain.linearRampToValueAtTime(0.0001, t + 0.3);
+    }
+  }
+  function setPace(seconds) {
+    var x = 1 - Math.exp(-(seconds || 0) / 55);   // smooth ramp, ~0.8 by 90s
+    intenTarget = Math.max(0.15, Math.min(1, x * 1.25));
+  }
+
+  /* ---- sound toggle button + M key ---- */
+  function syncBtn() {
+    var b = document.getElementById('soundBtn');
+    if (!b) return;
+    b.innerHTML = muted ? '&#128263;' : '&#128266;';
+    b.setAttribute('aria-label', muted ? 'Sound off' : 'Sound on');
+    b.setAttribute('aria-pressed', muted ? 'false' : 'true');
+  }
+  function wire() {
+    var b = document.getElementById('soundBtn');
+    if (b) b.addEventListener('click', function () { api.toggle(); });
+    syncBtn();
+  }
+  if (document.readyState === 'loading') addEventListener('DOMContentLoaded', wire); else wire();
+  addEventListener('keydown', function (e) { if (e.key === 'm' || e.key === 'M') api.toggle(); });
+
+  var api = {
+    resume: unlock,
+    isMuted: function () { return muted; },
+    setMuted: function (m) {
+      muted = !!m;
+      try { localStorage.setItem('bb_sound', muted ? 'off' : 'on'); } catch (e) {}
+      if (muted) stopMusic();
+      syncBtn();
+    },
+    toggle: function () { api.setMuted(!muted); if (!muted) unlock(); },
+    musicStart: startMusic,
+    musicStop: stopMusic,
+    setPace: setPace,
+
+    start: function () { blip('square', 523, 784, 0.12, 0.25); },
+    jump: function () { blip('square', 420, 900, 0.14, 0.22); },
+    dash: function () { var t = at(); noiseBurst(0.22, 0.22, 'bandpass', 1800, t); blip('sawtooth', 900, 300, 0.2, 0.12, t); },
+    coin: function () { var t = at(); blip('square', 880, 880, 0.05, 0.18, t); blip('square', 1320, 1320, 0.07, 0.16, t + 0.05); },
+    gem: function () { var t = at(); blip('triangle', 1046, 1568, 0.18, 0.2, t); blip('triangle', 1568, 2093, 0.14, 0.12, t + 0.04); },
+    power: function () { var t = at(), n = [330, 440, 587, 784], i; for (i = 0; i < n.length; i++) blip('sawtooth', n[i], n[i], 0.09, 0.16, t + i * 0.06); },
+    meme: function () { var t = at(), n = [523, 659, 784, 1046, 1319], i; for (i = 0; i < n.length; i++) blip('square', n[i], n[i], 0.09, 0.16, t + i * 0.05); noiseBurst(0.3, 0.12, 'highpass', 4000, t); },
+    smash: function () { var t = at(); noiseBurst(0.18, 0.35, 'lowpass', 600, t); blip('square', 150, 55, 0.2, 0.32, t); },
+    hit: function () { var t = at(); blip('sawtooth', 440, 180, 0.22, 0.26, t); blip('sawtooth', 437, 177, 0.22, 0.2, t); noiseBurst(0.12, 0.18, 'bandpass', 900, t); },
+    die: function () { var t = at(); blip('sawtooth', 640, 60, 0.55, 0.3, t); noiseBurst(0.5, 0.3, 'lowpass', 1200, t); },
+    over: function () { var t = at(), n = [523, 392, 311, 262], i; for (i = 0; i < n.length; i++) blip('triangle', n[i], n[i], 0.26, 0.2, t + i * 0.13); blip('sawtooth', 131, 131, 0.7, 0.12, t); },
+    scan: function () { var t = at(); blip('sine', 1200, 1200, 0.3, 0.14, t); blip('sine', 1200, 1200, 0.3, 0.14, t + 0.4); },
+    alarm: function () { var t = at(); blip('square', 440, 440, 0.16, 0.18, t); blip('square', 330, 330, 0.16, 0.18, t + 0.18); blip('square', 440, 440, 0.16, 0.18, t + 0.36); }
+  };
+  return api;
+})();
+</script>
 
 <script>
 (() => {
@@ -421,17 +626,17 @@ function move(dir){
 }
 function jump(){
   if (player.h > 0.001){ S.jumpBuf = 0.25; return; }
-  player.vy = JUMP_V; player.h = 0.001;
+  player.vy = JUMP_V; player.h = 0.001; SFX.jump();
 }
 function dash(){
   if (S.dashCd > 0 || S.dashT > 0) return;
-  S.dashT = DASH_DUR; S.dashCd = DASH_CD;
+  S.dashT = DASH_DUR; S.dashCd = DASH_CD; SFX.dash();
   const [x, y] = proj(player.x, player.h, 0);
   for (let i = 0; i < 10; i++) addPart(x, y - L * 0.26, (Math.random() - .5) * 120, 80 + Math.random() * 160, C.cyan, 0.35);
 }
 function ghost(){
   if (S.meter < METER_MAX || S.ghost > 0) return;
-  S.meter = 0; S.ghost = GHOST_DUR; S.flash = 0.6; S.flashColor = C.violet; S.shake = 0.3;
+  S.meter = 0; S.ghost = GHOST_DUR; S.flash = 0.6; S.flashColor = C.violet; S.shake = 0.3; SFX.power();
   const [x, y] = proj(player.x, player.h, 0);
   S.parts.push({ ring:true, x, y:y - L * 0.26, life:0.6, max:0.6, color:C.violet });
   addText('GHOST MODE', x, y - L * 0.8, C.violet, 1.2, 1.4);
@@ -469,22 +674,23 @@ function start(){
   Object.assign(player, { lane:0, x:0, vx:0, h:0, vy:0, lastSwitch:-9 });
   showOverlay(null);
   beginRun();
+  SFX.resume(); SFX.start(); SFX.musicStart();
   cv.focus?.();
 }
-function pause(){ if (S.mode !== 'play') return; S.mode = 'paused'; showOverlay('pause'); $('resumeBtn').focus(); }
-function resume(){ if (S.mode !== 'paused') return; S.mode = 'play'; showOverlay(null); last = performance.now(); }
-function toTitle(){ S.mode = 'title'; S.objs = []; showOverlay('title'); $('playBtn').focus(); }
+function pause(){ if (S.mode !== 'play') return; S.mode = 'paused'; showOverlay('pause'); SFX.musicStop(); $('resumeBtn').focus(); }
+function resume(){ if (S.mode !== 'paused') return; S.mode = 'play'; showOverlay(null); SFX.musicStart(); last = performance.now(); }
+function toTitle(){ S.mode = 'title'; S.objs = []; showOverlay('title'); SFX.musicStop(); $('playBtn').focus(); }
 
 function die(kind){
   if (S.mode !== 'play') return;
-  S.mode = 'dying'; S.deathT = 0; S.reason = kind; S.shake = 1; S.flash = 0.5; S.flashColor = C.danger;
+  S.mode = 'dying'; S.deathT = 0; S.reason = kind; S.shake = 1; S.flash = 0.5; S.flashColor = C.danger; SFX.die();
   const [x, y] = proj(player.x, player.h, 0);
   burst(x, y - L * 0.26, C.amber, 40, 360);
   burst(x, y - L * 0.26, C.danger, 20, 240);
   btn.pause.hidden = btn.dash.hidden = btn.ghost.hidden = true;
 }
 function gameOver(){
-  S.mode = 'over'; S.overAt = performance.now();
+  S.mode = 'over'; S.overAt = performance.now(); SFX.over(); SFX.musicStop();
   const isBest = S.score > S.best;
   if (isBest){ S.best = S.score; saveBest(S.best); }
   const [reason, quip] = REASONS[S.reason];
@@ -532,7 +738,7 @@ function update(dt){
 
   const d = diff();
   S.speed = d.speed;
-  if (S.mode === 'play') S.t += wdt;
+  if (S.mode === 'play') { S.t += wdt; SFX.setPace(S.t); }
   S.dist += d.speed * wdt;
   if (S.mode === 'play' && S.cold.phase === 'on') S.frozen += d.speed * wdt;   // the score is frozen while in cold storage
 
@@ -645,7 +851,7 @@ function update(dt){
    Cracked tiles are visible from the far end of the track, so the warning is the cracks themselves. */
 function startScan(){
   const rg = S.rug;
-  rg.phase = 'scan'; rg.t = 0; rg.rows = 0; S.prevF = null;
+  rg.phase = 'scan'; rg.t = 0; rg.rows = 0; S.prevF = null; SFX.scan();
   S.objs.push({ type:'scan', x:0, z:Math.max(S.cursor, SPAWN_Z) + 10, hold:0, done:false });
   S.cursor = SPAWN_Z;
 }
@@ -722,7 +928,7 @@ const scoreNow = () => Math.floor(S.dist + S.dextra + S.frags * 25 + S.bonus - S
 
 function startHalving(){
   const h = S.halv;
-  h.phase = 'warn'; h.t = 0; h.fragT = 0.4; h.zone = null; h.branch = 0; S.prevF = null;
+  h.phase = 'warn'; h.t = 0; h.fragT = 0.4; h.zone = null; h.branch = 0; S.prevF = null; SFX.alarm();
   S.flash = 0.5; S.flashColor = C.amber; S.shake = 0.25;
 }
 function spawnFork(d){
@@ -816,7 +1022,7 @@ function bullUpdate(dt, d){
    The vault is never halved by the Halving and a hack hit cannot touch it. */
 function startCold(){
   const c = S.cold;
-  c.phase = 'warn'; c.t = 0; c.gems = 0; c.banked = 0; S.colds++;
+  c.phase = 'warn'; c.t = 0; c.gems = 0; c.banked = 0; S.colds++; SFX.alarm();
   S.flash = 0.4; S.flashColor = '#bfefff'; S.shake = 0.2;
 }
 function coldUpdate(dt, d){
@@ -859,7 +1065,7 @@ function bankGem(sx, sy){
    Walking through a phantom is worth a few points, surviving to the end is worth a bonus. */
 function startHack(){
   const h = S.hack;
-  h.phase = 'warn'; h.t = 0; h.fakeT = 0.3; S.hacks++;
+  h.phase = 'warn'; h.t = 0; h.fakeT = 0.3; S.hacks++; SFX.alarm();
   S.flash = 0.4; S.flashColor = '#ff2bd6'; S.shake = 0.3;
 }
 function hackUpdate(dt, d){
@@ -899,7 +1105,7 @@ function hurt(kind, o){
   if (S.grace > 0) return;
   o.gone = true;
   const amt = Math.min(HACK_HIT, Math.max(0, scoreNow() - S.vault));   // a hack cannot reach the vault
-  S.penalty += amt; S.hackHits++; S.grace = 0.9; S.shake = 0.7; S.flash = 0.6; S.flashColor = C.danger;
+  S.penalty += amt; S.hackHits++; S.grace = 0.9; S.shake = 0.7; S.flash = 0.6; S.flashColor = C.danger; SFX.hit();
   const [x, y] = proj(player.x, player.h, 0);
   addText('-' + amt.toLocaleString(), x, y - L * 0.9, C.danger, 1.4, 1.7);
   burst(x, y - L * 0.26, C.danger, 26, 320); burst(x, y - L * 0.26, '#ff2bd6', 16, 240);
@@ -916,7 +1122,7 @@ function collide(o, prevZ){
 
   if (o.type === 'frag'){
     if (crossed(0.8) && dx < (meme ? 1.3 : 0.6) && Math.abs(player.h - o.h) < 0.8){
-      o.gone = true; S.frags++;
+      o.gone = true; S.frags++; SFX.coin();
       if (meme) S.bonus += 25;
       if (S.ghost <= 0){
         const wasFull = S.meter >= METER_MAX;
@@ -933,14 +1139,14 @@ function collide(o, prevZ){
     if (crossed(0.8) && dx < 0.6 && Math.abs(player.h - o.h) < 0.8){
       o.gone = true;
       burst(sx, coinY, '#e6f9ff', 10, 170);
-      bankGem(sx, coinY);
+      bankGem(sx, coinY); SFX.gem();
     }
     return;
   }
 
   if (o.type === 'meme'){
     if (crossed(0.9) && dx < 0.75 && Math.abs(player.h - o.h) < 1.1){
-      o.gone = true; S.meme = MEME_DUR; S.bonus += 100;
+      o.gone = true; S.meme = MEME_DUR; S.bonus += 100; SFX.meme();
       S.flash = 0.7; S.flashColor = '#ff5fd2'; S.shake = 0.35;
       S.parts.push({ ring:true, x:sx, y:coinY, life:0.7, max:0.7, color:C.amber });
       burst(sx, coinY, '#ff5fd2', 30, 380); burst(sx, coinY, C.amber, 24, 300);
@@ -975,7 +1181,7 @@ function collide(o, prevZ){
   if (o.type === 'block' && crossed(0.5) && dx < 0.55 && !o.gone){
     if (safe) return;
     if (meme || S.dashT > 0){
-      o.gone = true; S.bonus += meme ? 20 : 50; S.shake = 0.3;
+      o.gone = true; S.bonus += meme ? 20 : 50; S.shake = 0.3; SFX.smash();
       const [bx, by] = proj(o.x, 0.75, o.z);
       burst(bx, by, meme ? CONFETTI[R(CONFETTI.length)] : C.violet, 26, 320); burst(bx, by, '#ff5fd2', 12, 220);
       addText(meme ? 'HONK! +20' : 'SMASHED +50', bx, by - L * 0.5, '#ff5fd2', 1);
