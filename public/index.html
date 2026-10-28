@@ -2279,15 +2279,45 @@ document.addEventListener('touchmove', e => { if (S.mode === 'play') e.preventDe
 /* ---------- leaderboard ---------- */
 // The game never depends on this. If the network or the function is unavailable, runs still play and the
 // personal best stays on the device.
-const API = '/api/leaderboard';
+// Shared accounts service — one login across the whole arcade. Blockchain
+// Breakout keeps its own UI and recovery; only the network layer is routed to
+// central (its own leaderboard board stays separate, keyed by game).
+const CENTRAL = 'https://agnostic.accounts.agnosticsolutions.co.uk';
+const GAME = 'blockchain-breakout';
+let _auth = null;
 const LB = { name:'', pin:'', email:'', token:null, tokenP:null, pending:null, from:'title' };
 try { LB.name = localStorage.getItem('bb_name') || ''; LB.pin = localStorage.getItem('bb_pin') || ''; LB.email = localStorage.getItem('bb_email') || ''; } catch (e) {}
 function saveId(){ try { localStorage.setItem('bb_name', LB.name); localStorage.setItem('bb_pin', LB.pin); localStorage.setItem('bb_email', LB.email || ''); } catch (e) {} }
-
+function bbWeekId(){ var d=new Date(),t=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())); var day=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day); var y0=new Date(Date.UTC(t.getUTCFullYear(),0,1)); return t.getUTCFullYear()+'-W'+String(Math.ceil(((t-y0)/864e5+1)/7)).padStart(2,'0'); }
+async function cFetch(path, opts){ opts=opts||{}; const headers={'content-type':'application/json'}; if(opts.auth&&_auth)headers['authorization']='Bearer '+_auth; const r=await fetch(CENTRAL+path,{method:'POST',headers,body:JSON.stringify(opts.body||{})}); let data=null; try{data=await r.json();}catch(e){} return {ok:r.ok,status:r.status,data}; }
+async function cAuth(name, pin){ if(_auth)return true; if(!name||!pin)return false; const r=await cFetch('/api/auth/login',{body:{username:name,pin}}); if(r.ok&&r.data&&r.data.token){_auth=r.data.token;return true;} return false; }
+// Old action protocol, routed to the shared accounts service, so the rest of
+// the module and its UI are unchanged.
 async function api(body){
-  const r = await fetch(API, { method:'POST', headers:{ 'content-type':'application/json' }, body:JSON.stringify(body) });
-  let data = null; try { data = await r.json(); } catch (e) {}
-  return { ok:r.ok, status:r.status, data };
+  const a = body && body.action;
+  if (a === 'start') return { ok:true, status:200, data:{ token:'central' } };
+  if (a === 'claim'){
+    let r = await cFetch('/api/auth/register', { body:{ username:body.name, pin:body.pin, email:body.email||'' } });
+    if (!(r.ok && r.data && r.data.token) && r.status === 409) r = await cFetch('/api/auth/login', { body:{ username:body.name, pin:body.pin } });
+    if (!(r.ok && r.data && r.data.token)) return { ok:false, status:r.status, data:{ message:(r.data&&r.data.detail)||'Could not sign in.' } };
+    _auth = r.data.token; const g = (r.data.games||{})[GAME]||{};
+    return { ok:true, status:200, data:{ name:r.data.username, email:r.data.email||'', best:Number(g.best)||0 } };
+  }
+  if (a === 'submit'){
+    const score = Math.floor(Number(body.score)||0), wk = bbWeekId();
+    if (!(await cAuth(body.name, body.pin))) return { ok:false, status:401, data:{ message:'Sign in to post a score.' } };
+    const r = await cFetch('/api/sync', { auth:true, body:{ game:GAME, best:score, week:wk, week_best:score } });
+    if (!(r.ok && r.data)) return { ok:false, status:r.status, data:{ message:(r.data&&r.data.detail)||'The ledger rejected that score.' } };
+    const best = Number(r.data.best)||0;
+    return { ok:true, status:200, data:{ improved: score >= best, rank:r.data.rank, best } };
+  }
+  if (a === 'forgot') return cFetch('/api/auth/forgot', { body:{ username:body.name } });
+  if (a === 'reset'){
+    const r = await cFetch('/api/auth/reset', { body:{ username:body.name, code:body.code, pin:body.pin } });
+    if (r.ok && r.data && r.data.token){ _auth = r.data.token; const g=(r.data.games||{})[GAME]||{}; return { ok:true, status:200, data:{ name:r.data.username, email:r.data.email||'', best:Number(g.best)||0 } }; }
+    return { ok:false, status:r.status, data:{ message:(r.data&&r.data.detail)||'Could not reset the PIN.' } };
+  }
+  return { ok:false, status:400, data:{} };
 }
 
 function beginRun(){
@@ -2385,9 +2415,9 @@ async function openBoard(){
   showOverlay('board');
   $('boardList').replaceChildren(); $('boardMsg').textContent = 'Loading…';
   try {
-    const r = await fetch(API + '?limit=25', { cache:'no-store' });
+    const r = await fetch(CENTRAL + '/api/leaderboard?game=' + GAME + '&period=all&limit=25', { cache:'no-store' });
     if (!r.ok) throw new Error('bad status');
-    renderBoard((await r.json()).entries || []);
+    renderBoard(((await r.json()).entries || []).map(function(e){ return { name:e.username, score:e.best }; }));
   } catch (e) {
     $('boardMsg').textContent = 'Leaderboard unreachable. It needs a connection.';
   }
