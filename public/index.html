@@ -2285,10 +2285,26 @@ document.addEventListener('touchmove', e => { if (S.mode === 'play') e.preventDe
 // central (its own leaderboard board stays separate, keyed by game).
 const CENTRAL = 'https://agnostic.accounts.agnosticsolutions.co.uk';
 const GAME = 'blockchain-breakout';
-let _auth = null;
+let _auth = null; // central Bearer token. Kept in localStorage (bb_token) so the PIN itself never has to be.
+try { _auth = localStorage.getItem('bb_token') || null; } catch (e) {}
 const LB = { name:'', pin:'', email:'', token:null, tokenP:null, pending:null, from:'title' };
-try { LB.name = localStorage.getItem('bb_name') || ''; LB.pin = localStorage.getItem('bb_pin') || ''; LB.email = localStorage.getItem('bb_email') || ''; } catch (e) {}
-function saveId(){ try { localStorage.setItem('bb_name', LB.name); localStorage.setItem('bb_pin', LB.pin); localStorage.setItem('bb_email', LB.email || ''); } catch (e) {} }
+let _legacyPin = ''; // a PIN saved by an older version of this game: swapped for a token once, then deleted
+try { LB.name = localStorage.getItem('bb_name') || ''; _legacyPin = localStorage.getItem('bb_pin') || ''; LB.email = localStorage.getItem('bb_email') || ''; } catch (e) {}
+function saveId(){ try { localStorage.setItem('bb_name', LB.name); localStorage.setItem('bb_email', LB.email || ''); if (_auth) localStorage.setItem('bb_token', _auth); localStorage.removeItem('bb_pin'); } catch (e) {} }
+// The sign-in key was refused (it expired, or the PIN was changed): forget it and ask for a fresh sign-in.
+function bbExpired(){ _auth = null; try { localStorage.removeItem('bb_token'); } catch (e) {} }
+const BB_EXPIRED = 'Your sign-in has run out. Tap your name and sign in again.';
+// Players who signed in before this change still have their PIN saved here. Swap it for a key once, then delete it.
+async function bbMigratePin(){
+  const pin = _legacyPin; _legacyPin = '';
+  if (_auth){ try { localStorage.removeItem('bb_pin'); } catch (e) {} return; }
+  if (!pin || !LB.name) return;
+  try {
+    const r = await cFetch('/api/auth/login', { body:{ username:LB.name, pin } });
+    if (r.ok && r.data && r.data.token){ _auth = r.data.token; saveId(); }
+    else if (r.status === 401 || r.status === 403 || r.status === 404){ try { localStorage.removeItem('bb_pin'); } catch (e) {} }
+  } catch (e) {}   // offline or the service is down: leave it and try again next visit
+}
 function bbWeekId(){ var d=new Date(),t=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())); var day=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day); var y0=new Date(Date.UTC(t.getUTCFullYear(),0,1)); return t.getUTCFullYear()+'-W'+String(Math.ceil(((t-y0)/864e5+1)/7)).padStart(2,'0'); }
 async function cFetch(path, opts){ opts=opts||{}; const headers={'content-type':'application/json'}; if(opts.auth&&_auth)headers['authorization']='Bearer '+_auth; const r=await fetch(CENTRAL+path,{method:'POST',headers,body:JSON.stringify(opts.body||{})}); let data=null; try{data=await r.json();}catch(e){} return {ok:r.ok,status:r.status,data}; }
 async function cAuth(name, pin){ if(_auth)return true; if(!name||!pin)return false; const r=await cFetch('/api/auth/login',{body:{username:name,pin}}); if(r.ok&&r.data&&r.data.token){_auth=r.data.token;return true;} return false; }
@@ -2306,8 +2322,9 @@ async function api(body){
   }
   if (a === 'submit'){
     const score = Math.floor(Number(body.score)||0), wk = bbWeekId();
-    if (!(await cAuth(body.name, body.pin))) return { ok:false, status:401, data:{ message:'Sign in to post a score.' } };
+    if (!(await cAuth(body.name, body.pin))) return { ok:false, status:401, data:{ message: body.name ? BB_EXPIRED : 'Sign in to post a score.' } };
     const r = await cFetch('/api/sync', { auth:true, body:{ game:GAME, best:score, week:wk, week_best:score } });
+    if (r.status === 401){ bbExpired(); return { ok:false, status:401, data:{ message:BB_EXPIRED } }; }
     if (!(r.ok && r.data)) return { ok:false, status:r.status, data:{ message:(r.data&&r.data.detail)||'The ledger rejected that score.' } };
     const best = Number(r.data.best)||0;
     return { ok:true, status:200, data:{ improved: score >= best, rank:r.data.rank, best } };
@@ -2368,7 +2385,7 @@ function updateWho(){ $('nameBtn').textContent = LB.name ? 'Name: ' + LB.name : 
 const back = () => { showOverlay(LB.from === 'over' ? 'over' : 'title'); };
 
 function openName(){
-  $('nameIn').value = LB.name; $('pinIn').value = LB.pin; $('emailIn').value = ''; $('nameErr').textContent = '';
+  $('nameIn').value = LB.name; $('pinIn').value = ''; $('emailIn').value = ''; $('nameErr').textContent = '';
   $('emailIn').placeholder = LB.email ? 'Saved: ' + LB.email + ' (type to change)' : 'Only used if you forget your PIN';
   showOverlay('name'); $('nameIn').focus();
 }
@@ -2385,7 +2402,7 @@ async function saveName(){
   try {
     const r = await api({ action:'claim', name, pin, email });
     if (r.ok && r.data){
-      LB.name = r.data.name || name; LB.pin = pin; LB.email = r.data.email || ''; saveId(); updateWho(); syncBest(r.data.best);
+      LB.name = r.data.name || name; LB.email = r.data.email || ''; saveId(); updateWho(); syncBest(r.data.best);
       err.textContent = '';
       back();
       if (LB.pending) submitPending();
@@ -2462,7 +2479,7 @@ async function doReset(){
   try {
     const r = await api({ action:'reset', name, code, pin });
     if (r.ok && r.data){
-      LB.name = r.data.name || name; LB.pin = pin; LB.email = r.data.email || LB.email; saveId(); updateWho(); syncBest(r.data.best);
+      LB.name = r.data.name || name; LB.email = r.data.email || LB.email; saveId(); updateWho(); syncBest(r.data.best);
       err.textContent = '';
       back();
       if (LB.from === 'over') setStatus('PIN reset. You are signed in as ' + LB.name + '.');
@@ -2487,7 +2504,7 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 resize();
-updateWho();
+updateWho(); bbMigratePin();
 showOverlay('title');
 if (/debug/.test(location.hash)) window.__bb = { S, player, move, jump, ghost, scoreNow, spawnPattern, diff };
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
